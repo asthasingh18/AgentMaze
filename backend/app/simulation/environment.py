@@ -1,5 +1,5 @@
 from app.logging.event_logger import EventLogger
-
+from app.security.attack_manager import AttackManager
 
 class Environment:
 
@@ -9,6 +9,7 @@ class Environment:
         self.tools = {}
 
         self.logger = EventLogger()
+        self.attack_manager = AttackManager()
 
     def add_agent(self, agent):
 
@@ -133,6 +134,15 @@ class Environment:
                 severity="HIGH"
             )
 
+            self.attack_manager.record_event(
+                event_type="INTER_AGENT_TRUST_ESCALATION",
+                agent_id=from_agent_id,
+                description="Agent attempted to delegate a task requiring an unauthorized capability",
+                severity="HIGH",
+                source=from_agent_id,
+                target=to_agent_id
+            )
+
             return {
                 "success": False,
                 "message": "Delegation blocked: target agent lacks required capability",
@@ -161,3 +171,7 @@ class Environment:
             "task": task,
             "delegation": delegation
         }
+    
+    def get_attack_events(self):
+
+        return self.attack_manager.get_events()
