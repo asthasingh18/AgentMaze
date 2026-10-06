@@ -3,6 +3,8 @@ from app.tools.tool import Tool
 from app.simulation.environment import Environment
 from app.security.attack_path_manager import AttackPathManager
 from app.security.attack_graph import AttackGraph
+from app.security.attack_explorer import AttackExplorer
+from app.security.path_risk_scorer import PathRiskScorer
 
 
 # ============================================================
@@ -107,7 +109,7 @@ goal_hijack = environment.attack_manager.record_event(
 
 
 # ============================================================
-# 9. SESSION CONTEXT CONTAMINATION
+# 9A. SESSION CONTEXT CONTAMINATION
 # ============================================================
 
 memory_contamination = environment.attack_manager.record_event(
@@ -116,6 +118,21 @@ memory_contamination = environment.attack_manager.record_event(
     description="Untrusted information contaminated the agent's persistent session context",
     severity="HIGH",
     source="external_input",
+    target="Agent-A",
+    parent_event_ids=[goal_hijack.event_id],
+    relation="ENABLES"
+)
+
+# ============================================================
+# 9B. MCP TOOL ABUSE BRANCH
+# ============================================================
+
+mcp_abuse = environment.attack_manager.record_event(
+    event_type="MCP_TOOL_ABUSE",
+    agent_id="A001",
+    description="A poisoned tool instruction attempted to influence agent behavior",
+    severity="HIGH",
+    source="untrusted_mcp_server",
     target="Agent-A",
     parent_event_ids=[goal_hijack.event_id],
     relation="ENABLES"
@@ -274,9 +291,70 @@ print("Attack Events:")
 for event in path.get_path():
     print(event)
 
+# ============================================================
+# 19A. DISCOVER ATTACK PATHS
+# ============================================================
+
+attack_explorer = AttackExplorer(
+    environment.attack_manager
+)
+
+discovered_paths = attack_explorer.discover_paths()
 
 # ============================================================
-# 19. BUILD ATTACK GRAPH
+# 19B. SCORE DISCOVERED ATTACK PATHS
+# ============================================================
+
+path_risk_scorer = PathRiskScorer()
+ranked_paths = path_risk_scorer.rank_paths(
+    discovered_paths
+)
+
+# ============================================================
+# 19C. RANK ATTACK PATHS
+# ============================================================
+
+print()
+print("Ranked Attack Paths")
+print("-----------------")
+
+for rank, item in enumerate(ranked_paths, start=1):
+
+    print()
+    print(f"Rank {rank}")
+    print("Path:", " → ".join(item["path"]))
+    print("Score:", item["score"])
+    print("Risk Level:", item["risk_level"])
+    print("Length:", item["length"])
+
+# ============================================================
+# 20. DISPLAY DISCOVERED ATTACK PATHS
+# ============================================================
+
+print()
+print("Discovered Attack Paths")
+print("-----------------")
+
+for index, path in enumerate(discovered_paths, start=1):
+
+    risk = path_risk_scorer.score_path(path)
+
+    print()
+    print(f"Path {index}:")
+
+    print(
+        " → ".join(
+            event.event_type
+            for event in path
+        )
+    )
+
+    print("Length:", risk["length"])
+    print("Risk Score:", risk["score"])
+    print("Risk Level:", risk["risk_level"])
+
+# ============================================================
+# 21. BUILD ATTACK GRAPH
 # ============================================================
 
 attack_graph = AttackGraph()
@@ -289,7 +367,7 @@ graph = attack_graph.get_graph()
 
 
 # ============================================================
-# 20. DISPLAY ATTACK GRAPH
+# 22. DISPLAY ATTACK GRAPH
 # ============================================================
 
 print()
