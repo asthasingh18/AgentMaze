@@ -5,6 +5,9 @@ from app.security.attack_path_manager import AttackPathManager
 from app.security.attack_graph import AttackGraph
 from app.security.attack_explorer import AttackExplorer
 from app.security.path_risk_scorer import PathRiskScorer
+from app.security.path_explainer import PathExplainer
+from app.security.mitigation_engine import MitigationEngine
+from app.security.retest_engine import RetestEngine
 
 
 # ============================================================
@@ -328,6 +331,48 @@ for rank, item in enumerate(ranked_paths, start=1):
     print("Length:", item["length"])
 
 # ============================================================
+# 19D. EXPLAIN HIGHEST-RISK ATTACK PATH
+# ============================================================
+
+path_explainer = PathExplainer()
+
+highest_risk_path = discovered_paths[0]
+
+explanation = path_explainer.explain_path(
+    highest_risk_path
+)
+
+# ============================================================
+# 19E. DISPLAY ATTACK PATH EXPLANATION
+# ============================================================
+
+print()
+print("Attack Path Explanation")
+print("-----------------")
+
+print("Summary:")
+print(explanation["summary"])
+
+print()
+print("Root Cause:")
+print(explanation["root_cause"])
+
+print()
+print("Attack Steps:")
+
+for step in explanation["steps"]:
+
+    print(
+        f"Step {step['step']}: "
+        f"{step['event_type']} "
+        f"[{step['severity']}]"
+    )
+
+print()
+print("Terminal Event:")
+print(explanation["terminal_event"])
+
+# ============================================================
 # 20. DISPLAY DISCOVERED ATTACK PATHS
 # ============================================================
 
@@ -354,7 +399,77 @@ for index, path in enumerate(discovered_paths, start=1):
     print("Risk Level:", risk["risk_level"])
 
 # ============================================================
-# 21. BUILD ATTACK GRAPH
+# 21A. MITIGATION PLAN
+# ============================================================
+
+mitigation_engine = MitigationEngine()
+
+mitigation_plan = mitigation_engine.generate_plan(
+    highest_risk_path
+)
+
+print()
+print("Mitigation Plan")
+print("-----------------")
+
+for action in mitigation_plan["actions"]:
+
+    print()
+    print("Event:", action["event"])
+    print("Control:", action["control"])
+    print("Action:", action["action"])
+
+# ============================================================
+# 21B. AUTOMATIC RE-TEST
+# ============================================================
+
+retest_engine = RetestEngine()
+
+retest_engine.apply_mitigation(
+    mitigation_plan
+)
+
+retest_result = retest_engine.retest_path(
+    highest_risk_path
+)
+
+print()
+print("Automatic Re-Test")
+print("-----------------")
+
+print("Status:", retest_result["status"])
+
+print(
+    "Original Path Length:",
+    retest_result["original_length"]
+)
+
+print(
+    "Blocked At:",
+    retest_result["blocked_at"]
+)
+
+print(
+    "Blocked Control:",
+    retest_result["blocked_control"]
+)
+
+print("Message:", retest_result["message"])
+
+print()
+print("Executed Attack Steps")
+print("-----------------")
+
+for step in retest_result["executed_steps"]:
+
+    print(
+        f"{step['event_type']} "
+        f"[{step['severity']}] "
+        f"→ {step['status']}"
+    )
+
+# ============================================================
+# 22. BUILD ATTACK GRAPH
 # ============================================================
 
 attack_graph = AttackGraph()
@@ -367,7 +482,7 @@ graph = attack_graph.get_graph()
 
 
 # ============================================================
-# 22. DISPLAY ATTACK GRAPH
+# 23. DISPLAY ATTACK GRAPH
 # ============================================================
 
 print()
