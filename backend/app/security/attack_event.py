@@ -40,3 +40,5 @@ class AttackEvent:
             "parent_event_ids": self.parent_event_ids,
             "relation": self.relation
         }
+ 
+    

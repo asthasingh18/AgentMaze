@@ -1,4 +1,6 @@
+from app.database import save_attack_event
 from app.security.attack_event import AttackEvent
+
 
 
 class AttackManager:
@@ -36,6 +38,8 @@ class AttackManager:
         self.next_event_id += 1
 
         self.events.append(event)
+
+        save_attack_event(event)
 
         return event
 

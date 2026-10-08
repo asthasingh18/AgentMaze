@@ -29,33 +29,73 @@ class Environment:
         self.tools[tool.tool_id] = tool
 
     def run_tool(self, agent_id, tool_id):
-        agent = self.agents[agent_id]
-        tool = self.tools[tool_id]
 
-        self.logger.log(
-            event_type="TOOL_REQUEST",
-            agent_id=agent_id,
-            details={
-                "tool_id": tool_id,
-                "tool_name": tool.name
-            },
-            status="REQUESTED"
-        )
+        agent = self.agents.get(agent_id)
+        tool = self.tools.get(tool_id)
+
+        if not agent:
+            return {
+                "success": False,
+                "message": f"Agent {agent_id} not found"
+            }
+
+        if not tool:
+            return {
+                "success": False,
+                "message": f"Tool {tool_id} not found"
+            }
+
+        from app.database import agent_has_tool
+
+        if not agent_has_tool(agent_id, tool_id):
+
+            # Normal security event
+            self.logger.log(
+                event_type="TOOL_ACCESS_DENIED",
+                agent_id=agent_id,
+                details={
+                    "tool_id": tool_id,
+                    "reason": "Tool not assigned to agent"
+                },
+                status="DENIED"
+            )
+
+            # Attack event
+            self.attack_manager.record_event(
+                event_type="MCP_PLUGIN_ABUSE",
+                agent_id=agent_id,
+                description=(
+                    f"{agent.name} attempted to access "
+                    f"unauthorized tool {tool.name}"
+                ),
+                severity="HIGH",
+                source=agent_id,
+                target=tool_id
+            )
+
+            return {
+                "success": False,
+                "message": f"{agent.name} is not assigned to {tool.name}"
+            }
 
         result = tool.execute(agent, self.logger)
 
-        self.logger.log(
-            event_type="TOOL_EXECUTION",
-            agent_id=agent_id,
-            details={
-                "tool_id": tool_id,
-                "tool_name": tool.name,
-                "required_permission": tool.required_permission
-            },
-            status="ALLOWED" if result["success"] else "BLOCKED"
-        )
+        if not result["success"]:
+            self.attack_manager.record_event(
+                event_type="CAPABILITY_ABUSE",
+                agent_id=agent_id,
+                description=(
+                    f"{agent.name} attempted to use {tool.name} "
+                    f"without the required capability "
+                    f"'{tool.required_permission}'"
+                ),
+                severity="HIGH",
+                source=agent_id,
+                target=tool_id
+            )
 
         return result
+
     def get_events(self):
         return self.logger.get_events()
 

@@ -1,4 +1,5 @@
 from app.memory.memory import AgentMemory
+from app.database import get_agent_capabilities
 
 
 class Agent:
@@ -13,7 +14,9 @@ class Agent:
 
     def can_use(self, capability):
 
-        return capability in self.permissions
+        capabilities = get_agent_capabilities(self.agent_id)
+
+        return capability in capabilities
 
     def has_capability(self, capability):
 
