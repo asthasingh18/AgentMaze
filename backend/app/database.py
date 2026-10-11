@@ -233,7 +233,81 @@ def save_attack_event(event):
         event.target
     ))
 
+    # --------------------------------------------------
+    # Event Dependencies
+    # --------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS event_dependencies (
+            parent_event_id TEXT,
+            child_event_id TEXT,
+            relation TEXT,
+
+            PRIMARY KEY (parent_event_id, child_event_id),
+
+            FOREIGN KEY (parent_event_id)
+                REFERENCES attack_events(event_id),
+
+            FOREIGN KEY (child_event_id)
+                REFERENCES attack_events(event_id)
+        )
+    """)
+ 
+
     connection.commit()
 
     connection.close()
+# --------------------------------------------------
+# Save Event Dependency
+# --------------------------------------------------
+
+def save_event_dependency(parent_event_id, child_event_id, relation):
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        INSERT OR IGNORE INTO event_dependencies (
+            parent_event_id,
+            child_event_id,
+            relation
+        )
+        VALUES (?, ?, ?)
+    """, (
+        parent_event_id,
+        child_event_id,
+        relation
+    ))
+
+    connection.commit()
+    connection.close()
     
+# --------------------------------------------------
+# Get Event Dependencies
+# --------------------------------------------------
+
+def get_event_dependencies():
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            parent_event_id,
+            child_event_id,
+            relation
+        FROM event_dependencies
+        ORDER BY parent_event_id, child_event_id
+    """)
+
+    rows = cursor.fetchall()
+    connection.close()
+
+    return [
+        {
+            "parent_event_id": row[0],
+            "child_event_id": row[1],
+            "relation": row[2]
+        }
+        for row in rows
+    ]
