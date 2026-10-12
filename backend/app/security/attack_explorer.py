@@ -1,15 +1,19 @@
+
+from app.database import load_attack_events_from_database
+
+
 class AttackExplorer:
 
-    def __init__(self, attack_manager):
-
+    def __init__(self, attack_manager=None):
         self.attack_manager = attack_manager
 
     def get_events(self):
+        if self.attack_manager is not None:
+            return self.attack_manager.events
 
-        return self.attack_manager.events
+        return load_attack_events_from_database()
 
     def discover_paths(self):
-
         events = self.get_events()
 
         event_map = {
@@ -20,11 +24,8 @@ class AttackExplorer:
         paths = []
 
         for event in events:
-
-            # Events without parents are possible
-            # starting points of attack paths.
+            # Events without parents are starting points.
             if not event.parent_event_ids:
-
                 self._explore_paths(
                     event,
                     event_map,
@@ -41,44 +42,30 @@ class AttackExplorer:
         current_path,
         paths
     ):
-
         children = []
 
-        # Find every event that depends on
-        # the current event.
         for candidate in event_map.values():
-
             if current_event.event_id in candidate.parent_event_ids:
-
                 children.append(candidate)
 
-        # No children means this is a terminal path.
         if not children:
-
             paths.append(current_path)
-
             return
 
-        # Explore EVERY child.
         for child in children:
-
-            new_path = current_path + [child]
+            # Prevent a cycle from causing infinite recursion.
+            if child in current_path:
+                continue
 
             self._explore_paths(
                 child,
                 event_map,
-                new_path,
+                current_path + [child],
                 paths
             )
 
     def get_path_sequences(self):
-
-        paths = self.discover_paths()
-
         return [
-            [
-                event.event_type
-                for event in path
-            ]
-            for path in paths
+            [event.event_type for event in path]
+            for path in self.discover_paths()
         ]
