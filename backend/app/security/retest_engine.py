@@ -34,7 +34,13 @@ class RetestEngine:
                 "CAPABILITY_VERIFICATION",
 
             "MCP_TOOL_ABUSE":
-                "MCP_PROVENANCE_CHECK"
+                "MCP_PROVENANCE_CHECK",
+
+            "MCP_PLUGIN_ABUSE":
+                "MCP_PROVENANCE_CHECK",
+            
+            "CAPABILITY_ABUSE":
+                "CAPABILITY_ENFORCEMENT"
         }
 
         return control_map.get(event_type)

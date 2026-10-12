@@ -21,7 +21,19 @@ class MitigationEngine:
             "MCP_TOOL_ABUSE": {
                 "action": "Validate tool provenance and isolate untrusted tool instructions",
                 "control": "MCP_PROVENANCE_CHECK"
+            },
+
+            "MCP_PLUGIN_ABUSE": {
+                "action": "Validate tool permissions and verify tool provenance before execution",
+                "control": "MCP_PROVENANCE_CHECK"
+            },
+
+            "CAPABILITY_ABUSE": {
+                "action": "Enforce least-privilege permissions and verify capabilities before each sensitive operation",
+                "control": "CAPABILITY_ENFORCEMENT"
             }
+
+
         }
 
     def get_mitigation(self, event_type):

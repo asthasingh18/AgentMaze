@@ -137,6 +137,59 @@ def create_tables():
                 REFERENCES agents(agent_id)
         )
     """)
+    
+    # --------------------------------------------------
+    # Event Dependencies
+    # --------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS event_dependencies (
+            parent_event_id TEXT,
+            child_event_id TEXT,
+            relation TEXT,
+
+            PRIMARY KEY (parent_event_id, child_event_id),
+
+            FOREIGN KEY (parent_event_id)
+                REFERENCES attack_events(event_id),
+
+            FOREIGN KEY (child_event_id)
+                REFERENCES attack_events(event_id)
+        )
+    """)
+    
+    # --------------------------------------------------
+    # Attack Paths
+    # --------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS attack_paths (
+            path_id TEXT PRIMARY KEY,
+            created_at TEXT,
+            risk_level TEXT,
+            description TEXT
+        )
+    """)
+
+    # --------------------------------------------------
+    # Attack Path Events
+    # --------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS attack_path_events (
+            path_id TEXT,
+            event_id TEXT,
+            event_order INTEGER,
+
+            PRIMARY KEY (path_id, event_order),
+
+            FOREIGN KEY (path_id)
+                REFERENCES attack_paths(path_id),
+
+            FOREIGN KEY (event_id)
+                REFERENCES attack_events(event_id)
+        )
+    """)
 
     # Save changes
     connection.commit()
@@ -233,27 +286,6 @@ def save_attack_event(event):
         event.target
     ))
 
-    # --------------------------------------------------
-    # Event Dependencies
-    # --------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS event_dependencies (
-            parent_event_id TEXT,
-            child_event_id TEXT,
-            relation TEXT,
-
-            PRIMARY KEY (parent_event_id, child_event_id),
-
-            FOREIGN KEY (parent_event_id)
-                REFERENCES attack_events(event_id),
-
-            FOREIGN KEY (child_event_id)
-                REFERENCES attack_events(event_id)
-        )
-    """)
- 
-
     connection.commit()
 
     connection.close()
@@ -311,3 +343,190 @@ def get_event_dependencies():
         }
         for row in rows
     ]
+
+
+# --------------------------------------------------
+# Load Attack Events and Dependencies from Database
+# --------------------------------------------------
+
+def load_attack_events_from_database():
+
+    from app.security.attack_event import AttackEvent
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            event_id,
+            timestamp,
+            event_type,
+            agent_id,
+            description,
+            severity,
+            source,
+            target
+        FROM attack_events
+        ORDER BY timestamp, event_id
+    """)
+
+    rows = cursor.fetchall()
+
+    events = {}
+
+    for row in rows:
+        event = AttackEvent(
+            event_type=row[2],
+            agent_id=row[3],
+            description=row[4],
+            severity=row[5],
+            source=row[6],
+            target=row[7]
+        )
+
+        event.event_id = row[0]
+        event.timestamp = row[1]
+
+        events[event.event_id] = event
+
+    cursor.execute("""
+        SELECT
+            parent_event_id,
+            child_event_id,
+            relation
+        FROM event_dependencies
+    """)
+
+    dependencies = cursor.fetchall()
+
+    connection.close()
+
+    for parent_id, child_id, relation in dependencies:
+        if child_id in events and parent_id in events:
+            events[child_id].parent_event_ids.append(parent_id)
+
+    return list(events.values())
+
+
+# --------------------------------------------------
+# Save Discovered Attack Path
+# --------------------------------------------------
+
+def save_attack_path(path_id, events, risk_level=None, description=None):
+
+    from datetime import datetime
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT OR REPLACE INTO attack_paths (
+                path_id,
+                created_at,
+                risk_level,
+                description
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            path_id,
+            datetime.now().isoformat(),
+            risk_level,
+            description
+        ))
+
+        # Remove old event links if this path is being saved again.
+        cursor.execute("""
+            DELETE FROM attack_path_events
+            WHERE path_id = ?
+        """, (path_id,))
+
+        for order, event in enumerate(events, start=1):
+            event_id = (
+                event.event_id
+                if hasattr(event, "event_id")
+                else event["event_id"]
+            )
+
+            cursor.execute("""
+                INSERT INTO attack_path_events (
+                    path_id,
+                    event_id,
+                    event_order
+                )
+                VALUES (?, ?, ?)
+            """, (
+                path_id,
+                event_id,
+                order
+            ))
+
+        connection.commit()
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+
+# --------------------------------------------------
+# Read Saved Attack Paths
+# --------------------------------------------------
+
+def get_saved_attack_paths():
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            path_id,
+            created_at,
+            risk_level,
+            description
+        FROM attack_paths
+        ORDER BY path_id
+    """)
+
+    paths = cursor.fetchall()
+
+    results = []
+
+    for path_id, created_at, risk_level, description in paths:
+
+        cursor.execute("""
+            SELECT
+                attack_path_events.event_order,
+                attack_events.event_id,
+                attack_events.event_type
+            FROM attack_path_events
+            JOIN attack_events
+                ON attack_path_events.event_id = attack_events.event_id
+            WHERE attack_path_events.path_id = ?
+            ORDER BY attack_path_events.event_order
+        """, (path_id,))
+
+        events = cursor.fetchall()
+
+        results.append({
+            "path_id": path_id,
+            "created_at": created_at,
+            "risk_level": risk_level,
+            "description": description,
+            "events": [
+                {
+                    "event_order": row[0],
+                    "event_id": row[1],
+                    "event_type": row[2]
+                }
+                for row in events
+            ]
+        })
+
+    connection.close()
+
+    return results
+
+

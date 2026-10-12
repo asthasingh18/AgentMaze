@@ -8,6 +8,7 @@ from app.security.path_risk_scorer import PathRiskScorer
 from app.security.path_explainer import PathExplainer
 from app.security.mitigation_engine import MitigationEngine
 from app.security.retest_engine import RetestEngine
+from app.security.security_report import SecurityReport
 
 
 # ============================================================
@@ -336,7 +337,29 @@ for rank, item in enumerate(ranked_paths, start=1):
 
 path_explainer = PathExplainer()
 
-highest_risk_path = discovered_paths[0]
+highest_risk_path = max(
+    discovered_paths,
+    key=lambda path: path_risk_scorer.calculate_score(path)
+) if discovered_paths else []
+
+# Generate the unified security report
+security_report = SecurityReport()
+unified_report = security_report.generate_report(highest_risk_path)
+
+print("\n========== UNIFIED SECURITY REPORT ==========")
+print("Report Status:", unified_report["status"])
+
+if unified_report["status"] == "GENERATED":
+    print("Risk Score:", unified_report["risk"]["score"])
+    print("Risk Level:", unified_report["risk"]["risk_level"])
+    print("Root Cause:", unified_report["explanation"]["root_cause"]["event_type"])
+    print("Terminal Event:", unified_report["explanation"]["terminal_event"]["event_type"])
+    print("Mitigation Controls:", unified_report["mitigation_plan"]["controls"])
+    print("Before Retest:", unified_report["before_retest"]["status"])
+    print("After Retest:", unified_report["after_retest"]["status"])
+    print("Blocked At:", unified_report["after_retest"]["blocked_at"])
+
+print("==============================================")
 
 explanation = path_explainer.explain_path(
     highest_risk_path

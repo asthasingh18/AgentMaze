@@ -82,3 +82,44 @@ class PathRiskScorer:
         )
 
         return ranked_paths    
+
+    
+    def score_and_save_paths(self, paths):
+
+        from app.database import save_attack_path
+
+        results = []
+
+        for path_number, path in enumerate(paths, start=1):
+
+            risk = self.score_path(path)
+
+            path_id = f"DB-PATH-{path_number:03d}"
+
+            save_attack_path(
+                path_id=path_id,
+                events=path,
+                risk_level=risk["risk_level"],
+                description=(
+                    f"Calculated risk score: {risk['score']}; "
+                    f"path length: {risk['length']}"
+                )
+            )
+
+            results.append({
+                "path_id": path_id,
+                "score": risk["score"],
+                "risk_level": risk["risk_level"],
+                "length": risk["length"],
+                "events": [
+                    event.event_type for event in path
+                ]
+            })
+
+        results.sort(
+            key=lambda item: item["score"],
+            reverse=True
+        )
+
+        return results
+    
