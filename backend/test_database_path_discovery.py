@@ -1,30 +1,57 @@
 
+from app.security.attack_event import AttackEvent
 from app.security.attack_explorer import AttackExplorer
 
 
-explorer = AttackExplorer()
-paths = explorer.discover_paths()
+class TestEventManager:
+    """Provides controlled events without using the project database."""
 
-print("\nDATABASE-BACKED ATTACK PATHS:")
+    def __init__(self, events):
+        self.events = events
 
-for path in paths:
-    print(
-        " -> ".join(
-            f"{event.event_id}:{event.event_type}"
-            for event in path
-        )
+
+def main():
+    # Create a controlled parent event.
+    parent = AttackEvent(
+        event_type="TEST_PARENT",
+        agent_id="TEST-A01",
+        description="Test starting event",
+        severity="HIGH",
+    )
+    parent.event_id = "TEST-PARENT-001"
+
+    # Create a child event linked to the parent.
+    child = AttackEvent(
+        event_type="TEST_CHILD",
+        agent_id="TEST-A02",
+        description="Test dependent event",
+        severity="HIGH",
+        parent_event_ids=[parent.event_id],
+        relation="leads_to",
+    )
+    child.event_id = "TEST-CHILD-001"
+
+    manager = TestEventManager([parent, child])
+    explorer = AttackExplorer(manager)
+
+    paths = explorer.discover_paths()
+
+    print("\nTEST ATTACK PATHS:")
+    for path in paths:
+        print(" -> ".join(event.event_type for event in path))
+
+    expected_path = ["TEST_PARENT", "TEST_CHILD"]
+
+    found = any(
+        [event.event_type for event in path] == expected_path
+        for path in paths
     )
 
-expected_parent = "ATK-009"
-expected_child = "ATK-010"
+    print("\nExpected parent-child path found:", found)
+    assert found, "Expected parent-child attack path was not discovered."
 
-found = any(
-    any(event.event_id == expected_parent for event in path)
-    and any(event.event_id == expected_child for event in path)
-    for path in paths
-)
+    print("TEST PASSED")
 
-print("\nExpected parent-child path found:", found)
 
-assert found, "Expected database-backed attack path was not discovered."
-print("TEST PASSED")
+if __name__ == "__main__":
+    main()
