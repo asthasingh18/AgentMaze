@@ -247,56 +247,8 @@ print("-----------------")
 for event in environment.get_attack_events():
     print(event)
 
-
 # ============================================================
-# 17. CREATE ATTACK PATH
-# ============================================================
-
-attack_path_manager = AttackPathManager()
-
-path = attack_path_manager.create_path()
-
-attack_events = environment.attack_manager.events
-
-
-# Add all attack events to the path.
-# Relationships are already defined explicitly above.
-
-for event in attack_events:
-
-    attack_path_manager.add_event_to_path(
-        path,
-        event
-    )
-
-
-# ============================================================
-# 18. DISPLAY ATTACK PATH
-# ============================================================
-
-print()
-print("Attack Path")
-print("-----------------")
-
-print("Path ID:", path.path_id)
-
-print("Path Length:", path.length())
-
-
-print()
-print("Attack Sequence:")
-
-print(" → ".join(path.get_sequence()))
-
-
-print()
-print("Attack Events:")
-
-for event in path.get_path():
-    print(event)
-
-# ============================================================
-# 19A. DISCOVER ATTACK PATHS
+# 17. DISCOVER CONNECTED ATTACK PATHS
 # ============================================================
 
 attack_explorer = AttackExplorer(
@@ -305,8 +257,44 @@ attack_explorer = AttackExplorer(
 
 discovered_paths = attack_explorer.discover_paths()
 
+
 # ============================================================
-# 19B. SCORE DISCOVERED ATTACK PATHS
+# 18. DISPLAY DISCOVERED ATTACK PATHS
+# ============================================================
+
+print()
+print("Connected Attack Paths")
+print("-----------------------")
+
+if not discovered_paths:
+    print("No connected attack paths discovered.")
+
+else:
+    for index, discovered_path in enumerate(
+        discovered_paths,
+        start=1
+    ):
+        sequence = [
+            event.event_type
+            for event in discovered_path
+        ]
+
+        print()
+        print(f"Path {index}:")
+        print("Attack Sequence:", " -> ".join(sequence))
+        print("Path Length:", len(discovered_path))
+        print("Attack Events:")
+
+        for event in discovered_path:
+            print(
+                f"ID: {event.event_id} | "
+                f"Type: {event.event_type} | "
+                f"Severity: {event.severity}"
+            )
+            print(f"Description: {event.description}")
+
+# ============================================================
+# 19A. SCORE DISCOVERED ATTACK PATHS
 # ============================================================
 
 path_risk_scorer = PathRiskScorer()
@@ -315,7 +303,7 @@ ranked_paths = path_risk_scorer.rank_paths(
 )
 
 # ============================================================
-# 19C. RANK ATTACK PATHS
+# 19B. RANK ATTACK PATHS
 # ============================================================
 
 print()
@@ -332,7 +320,7 @@ for rank, item in enumerate(ranked_paths, start=1):
     print("Length:", item["length"])
 
 # ============================================================
-# 19D. EXPLAIN HIGHEST-RISK ATTACK PATH
+# 19C. EXPLAIN HIGHEST-RISK ATTACK PATH
 # ============================================================
 
 path_explainer = PathExplainer()
@@ -366,7 +354,7 @@ explanation = path_explainer.explain_path(
 )
 
 # ============================================================
-# 19E. DISPLAY ATTACK PATH EXPLANATION
+# 19D. DISPLAY ATTACK PATH EXPLANATION
 # ============================================================
 
 print()
@@ -529,9 +517,15 @@ print()
 print("Attack Risk")
 print("-----------------")
 
-print("Risk Score:", attack_graph.calculate_risk_score())
+print(
+    "Whole-Graph Risk Score:",
+    attack_graph.calculate_risk_score()
+)
 
-print("Risk Level:", attack_graph.get_risk_level())
+print(
+    "Whole-Graph Risk Level:",
+    attack_graph.get_risk_level()
+)
 
 print()
 print("Root Cause Analysis")
