@@ -354,7 +354,39 @@ explanation = path_explainer.explain_path(
 )
 
 # ============================================================
-# 19D. DISPLAY ATTACK PATH EXPLANATION
+# 19D.BRANCH-LEVEL SECURITY REPORT
+# ============================================================
+
+branch_report = SecurityReport().generate_branch_report(
+    discovered_paths
+)
+
+print()
+print("========== BRANCH-LEVEL SECURITY REPORT ==========")
+print("Report Status:", branch_report["status"])
+print("Branch Count:", branch_report["branch_count"])
+print("Overall Status:", branch_report["overall_status"])
+
+for branch in branch_report["branches"]:
+    print()
+    print("Branch:", branch["branch"])
+    print("Attack Sequence:", " -> ".join(
+        branch["attack_sequence"]
+    ))
+    print("Path Length:", branch["path_length"])
+    print("Risk:", branch["risk"])
+    print("Before Retest:", branch["before_retest"]["status"])
+    print("After Retest:", branch["after_retest"]["status"])
+    print(
+        "Blocked At:",
+        branch["after_retest"]["blocked_at"]
+    )
+
+print("==================================================")
+
+
+# ============================================================
+# 19E. DISPLAY ATTACK PATH EXPLANATION
 # ============================================================
 
 print()
@@ -415,8 +447,8 @@ for index, path in enumerate(discovered_paths, start=1):
 
 mitigation_engine = MitigationEngine()
 
-mitigation_plan = mitigation_engine.generate_plan(
-    highest_risk_path
+mitigation_plan = mitigation_engine.generate_plan_for_paths(
+    discovered_paths
 )
 
 print()
@@ -424,60 +456,48 @@ print("Mitigation Plan")
 print("-----------------")
 
 for action in mitigation_plan["actions"]:
-
     print()
     print("Event:", action["event"])
     print("Control:", action["control"])
     print("Action:", action["action"])
 
 # ============================================================
-# 21B. AUTOMATIC RE-TEST
+# 21B. AUTOMATIC RE-TEST FOR ALL ATTACK PATHS
 # ============================================================
 
 retest_engine = RetestEngine()
 
-retest_engine.apply_mitigation(
-    mitigation_plan
-)
-
-retest_result = retest_engine.retest_path(
-    highest_risk_path
-)
+retest_engine.apply_mitigation(mitigation_plan)
 
 print()
-print("Automatic Re-Test")
-print("-----------------")
+print("Automatic Re-Test - All Attack Paths")
+print("-------------------------------------")
 
-print("Status:", retest_result["status"])
+for index, path in enumerate(discovered_paths, start=1):
 
-print(
-    "Original Path Length:",
-    retest_result["original_length"]
-)
+    retest_result = retest_engine.retest_path(path)
 
-print(
-    "Blocked At:",
-    retest_result["blocked_at"]
-)
+    print()
+    print(f"Path {index}:")
+    print("Attack Sequence:", " -> ".join(
+        event.event_type for event in path
+    ))
 
-print(
-    "Blocked Control:",
-    retest_result["blocked_control"]
-)
+    print("Status:", retest_result["status"])
+    print("Original Path Length:", retest_result["original_length"])
+    print("Blocked At:", retest_result["blocked_at"])
+    print("Blocked Control:", retest_result["blocked_control"])
+    print("Message:", retest_result["message"])
 
-print("Message:", retest_result["message"])
+    print()
+    print("Executed Attack Steps:")
 
-print()
-print("Executed Attack Steps")
-print("-----------------")
-
-for step in retest_result["executed_steps"]:
-
-    print(
-        f"{step['event_type']} "
-        f"[{step['severity']}] "
-        f"→ {step['status']}"
-    )
+    for step in retest_result["executed_steps"]:
+        print(
+            f"{step['event_type']} "
+            f"[{step['severity']}] "
+            f"-> {step['status']}"
+        )
 
 # ============================================================
 # 22. BUILD ATTACK GRAPH
