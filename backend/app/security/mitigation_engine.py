@@ -77,3 +77,49 @@ class MitigationEngine:
             "controls": list(dict.fromkeys(controls)),
             "actions": actions
         }
+
+    def generate_plan_for_paths(self, paths):
+
+        if not paths:
+            return {
+                "controls": [],
+                "actions": []
+            }
+
+        controls = []
+        actions = []
+        processed_events = set()
+
+        for path in paths:
+            for event in path:
+
+                # Avoid duplicate actions for shared events.
+                event_key = (
+                    event.event_id
+                    if event.event_id is not None
+                    else (event.event_type, event.agent_id)
+                )
+
+                if event_key in processed_events:
+                    continue
+
+                processed_events.add(event_key)
+
+                mitigation = self.get_mitigation(
+                    event.event_type
+                )
+
+                control = mitigation["control"]
+
+                controls.append(control)
+
+                actions.append({
+                    "event": event.event_type,
+                    "control": control,
+                    "action": mitigation["action"]
+                })
+
+        return {
+            "controls": list(dict.fromkeys(controls)),
+            "actions": actions
+        }    
