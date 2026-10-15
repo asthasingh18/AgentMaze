@@ -9,6 +9,7 @@ from app.security.path_explainer import PathExplainer
 from app.security.mitigation_engine import MitigationEngine
 from app.security.retest_engine import RetestEngine
 from app.security.security_report import SecurityReport
+from app.security.resilience_analyzer import ResilienceAnalyzer
 
 
 # ============================================================
@@ -354,7 +355,7 @@ explanation = path_explainer.explain_path(
 )
 
 # ============================================================
-# 19D.BRANCH-LEVEL SECURITY REPORT
+# 19D. BRANCH-LEVEL SECURITY REPORT
 # ============================================================
 
 branch_report = SecurityReport().generate_branch_report(
@@ -366,8 +367,24 @@ print("========== BRANCH-LEVEL SECURITY REPORT ==========")
 print("Report Status:", branch_report["status"])
 print("Branch Count:", branch_report["branch_count"])
 print("Overall Status:", branch_report["overall_status"])
+print(
+    "Effective Branches:",
+    branch_report.get("effective_branches", 0)
+)
+print(
+    "Ineffective Branches:",
+    branch_report.get("ineffective_branches", 0)
+)
+print(
+    "Mitigation Effectiveness:",
+    f'{branch_report.get("effectiveness_percentage", 0)}%'
+)
 
 for branch in branch_report["branches"]:
+    effectiveness = branch.get(
+        "mitigation_effectiveness", {}
+    )
+
     print()
     print("Branch:", branch["branch"])
     print("Attack Sequence:", " -> ".join(
@@ -377,16 +394,81 @@ for branch in branch_report["branches"]:
     print("Risk:", branch["risk"])
     print("Before Retest:", branch["before_retest"]["status"])
     print("After Retest:", branch["after_retest"]["status"])
+    print("Blocked At:", branch["after_retest"]["blocked_at"])
     print(
-        "Blocked At:",
-        branch["after_retest"]["blocked_at"]
+        "Blocked Control:",
+        branch["after_retest"].get("blocked_control")
+    )
+    print(
+        "Mitigation Effectiveness:",
+        effectiveness.get("effectiveness", "NOT_AVAILABLE")
     )
 
 print("==================================================")
 
+#=============================================================
+# 19E. ADAPTIVE MITIGATION REPORT
+#=============================================================
+
+adaptive_report = SecurityReport().generate_adaptive_report(
+    discovered_paths,
+    disabled_controls={"GOAL_VALIDATION"}
+)
+
+print()
+print("========== ADAPTIVE MITIGATION REPORT ==========")
+print("Report Status:", adaptive_report["status"])
+print("Disabled Controls:", adaptive_report["disabled_controls"])
+print("Branch Count:", adaptive_report["branch_count"])
+print("Overall Status:", adaptive_report["overall_status"])
+print("Effective Branches:", adaptive_report["effective_branches"])
+print("Ineffective Branches:", adaptive_report["ineffective_branches"])
+print(
+    "Mitigation Effectiveness:",
+    f'{adaptive_report["effectiveness_percentage"]}%'
+)
+
+for branch in adaptive_report["branches"]:
+    print()
+    print("Branch:", branch["branch"])
+    print("Attack Sequence:", " -> ".join(branch["attack_sequence"]))
+    print("Executed Steps:", len(branch["executed_steps"]))
+    print("Blocked At:", branch["blocked_at"])
+    print("Blocked Control:", branch["blocked_control"])
+    print("Remaining Exploitable:", branch["remaining_exploitable"])
+    print("Status:", branch["status"])
+    print("Message:", branch["message"])
+
+print("================================================")
+
+#===========================================================
+# 19F. AUTOMATED RESILIENCE ANALYSIS
+#===========================================================
+
+resilience_report = ResilienceAnalyzer().analyze(discovered_paths)
+
+print()
+print("========== RESILIENCE ANALYSIS REPORT ==========")
+print("Report Status:", resilience_report["status"])
+print("Scenarios Tested:", resilience_report["scenario_count"])
+print("Attack Branches:", resilience_report["branch_count"])
+print("Total Retests:", resilience_report["total_tests"])
+print("Blocked Retests:", resilience_report["blocked_tests"])
+print("Exploitable Retests:", resilience_report["vulnerable_tests"])
+print("Vulnerable Retests:", resilience_report["vulnerable_tests"])
+print("Resilience Percentage:", f'{resilience_report["resilience_percentage"]}%')
+print("Overall Status:", resilience_report["overall_status"])
+
+print("\nVulnerable Branches:")
+for branch in resilience_report["vulnerable_branches"]:
+    print("Branch:", branch["branch"])
+    print("Attack Sequence:", " -> ".join(branch["attack_sequence"]))
+    print("Vulnerable Scenarios:", branch["vulnerable_scenarios"])
+
+print("================================================")
 
 # ============================================================
-# 19E. DISPLAY ATTACK PATH EXPLANATION
+# 19G. DISPLAY ATTACK PATH EXPLANATION
 # ============================================================
 
 print()

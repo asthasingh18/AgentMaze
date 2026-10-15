@@ -65,28 +65,41 @@ class SecurityReport:
             return {
                 "status": "NO_PATHS",
                 "branches": [],
-                "overall_status": "NOT_TESTED"
+                "overall_status": "NOT_TESTED",
+                "effectiveness_percentage": 0
             }
 
         branches = []
 
         for index, path in enumerate(paths, start=1):
 
-            # Assess the individual branch.
+            # 1. Assess individual branch risk.
             risk = self.risk_scorer.score_path(path)
 
-            # Recommend controls for this branch only.
+            # 2. Generate branch-specific mitigation recommendations.
             mitigation_plan = self.mitigation_engine.generate_plan(path)
 
-            # Check the path before mitigation.
+            # 3. Test the branch before mitigation.
             before_retest = RetestEngine().retest_path(path)
 
-            # Use a fresh engine so controls from one branch
-            # cannot accidentally affect another branch.
+            # 4. Apply only this branch's controls.
             branch_retest_engine = RetestEngine()
             branch_retest_engine.apply_mitigation(mitigation_plan)
 
+            # 5. Re-test the branch.
             after_retest = branch_retest_engine.retest_path(path)
+
+            # 6. Extract mitigation effectiveness details.
+            blocked = after_retest["status"] == "PASS"
+
+            branch_effectiveness = {
+                "blocked": blocked,
+                "blocked_at": after_retest.get("blocked_at"),
+                "blocked_control": after_retest.get("blocked_control"),
+                "effectiveness": (
+                    "EFFECTIVE" if blocked else "INEFFECTIVE"
+                )
+            }
 
             branches.append({
                 "branch": index,
@@ -97,18 +110,103 @@ class SecurityReport:
                 "risk": risk,
                 "mitigation_plan": mitigation_plan,
                 "before_retest": before_retest,
-                "after_retest": after_retest
+                "after_retest": after_retest,
+                "mitigation_effectiveness": branch_effectiveness
             })
 
-        all_passed = all(
-            branch["after_retest"]["status"] == "PASS"
+        effective_count = sum(
+            1
             for branch in branches
+            if branch["mitigation_effectiveness"]["blocked"]
         )
+
+        effectiveness_percentage = round(
+            (effective_count / len(branches)) * 100,
+            2
+        )
+
+        all_passed = effective_count == len(branches)
 
         return {
             "status": "GENERATED",
             "branch_count": len(branches),
             "branches": branches,
+            "effective_branches": effective_count,
+            "ineffective_branches": len(branches) - effective_count,
+            "effectiveness_percentage": effectiveness_percentage,
             "overall_status": "PASS" if all_passed else "FAIL"
+        }
+
+    
+    def generate_adaptive_report(self, paths, disabled_controls=None):
+
+        if not paths:
+            return {
+                "status": "NO_PATHS",
+                "branches": [],
+                "overall_status": "NOT_TESTED",
+                "effectiveness_percentage": 0
+            }
+
+        # Default experiment: disable the root goal-validation control.
+        if disabled_controls is None:
+            disabled_controls = {"GOAL_VALIDATION"}
+        else:
+            disabled_controls = set(disabled_controls)
+
+        branches = []
+
+        for index, path in enumerate(paths, start=1):
+
+            # 1. Generate mitigation controls for this branch.
+            mitigation_plan = self.mitigation_engine.generate_plan(path)
+
+            # 2. Configure the branch's controls.
+            adaptive_engine = RetestEngine()
+            adaptive_engine.apply_mitigation(mitigation_plan)
+
+            # 3. Temporarily disable selected controls and retest.
+            result = adaptive_engine.retest_path_with_disabled_controls(
+                path,
+                disabled_controls
+            )
+
+            blocked = result["status"] == "PASS"
+
+            branches.append({
+                "branch": index,
+                "attack_sequence": [
+                    event.event_type for event in path
+                ],
+                "disabled_controls": sorted(disabled_controls),
+                "executed_steps": result["executed_steps"],
+                "blocked_at": result.get("blocked_at"),
+                "blocked_control": result.get("blocked_control"),
+                "remaining_exploitable": not blocked,
+                "status": result["status"],
+                "message": result["message"]
+            })
+
+        effective_count = sum(
+            1 for branch in branches
+            if branch["status"] == "PASS"
+        )
+
+        total = len(branches)
+        effectiveness_percentage = round(
+            effective_count / total * 100, 2
+        )
+
+        return {
+            "status": "GENERATED",
+            "disabled_controls": sorted(disabled_controls),
+            "branch_count": total,
+            "branches": branches,
+            "effective_branches": effective_count,
+            "ineffective_branches": total - effective_count,
+            "effectiveness_percentage": effectiveness_percentage,
+            "overall_status": (
+                "PASS" if effective_count == total else "FAIL"
+            )
         }
     

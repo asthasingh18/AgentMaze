@@ -123,3 +123,16 @@ class RetestEngine:
             "blocked_control": None,
             "message": "Attack path remains exploitable."
         }
+
+    def retest_path_with_disabled_controls(self, path, disabled_controls):
+        """
+        Retest an attack path while temporarily disabling selected controls.
+        Does not modify the engine's configured blocked controls.
+        """
+        original_controls = self.blocked_controls.copy()
+
+        try:
+            self.blocked_controls.difference_update(disabled_controls)
+            return self.retest_path(path)
+        finally:
+            self.blocked_controls = original_controls    
