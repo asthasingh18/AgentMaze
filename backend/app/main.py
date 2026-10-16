@@ -10,6 +10,7 @@ from app.security.mitigation_engine import MitigationEngine
 from app.security.retest_engine import RetestEngine
 from app.security.security_report import SecurityReport
 from app.security.resilience_analyzer import ResilienceAnalyzer
+from app.security.resilience_diagnoser import ResilienceDiagnoser
 
 
 # ============================================================
@@ -467,8 +468,38 @@ for branch in resilience_report["vulnerable_branches"]:
 
 print("================================================")
 
+#============================================================
+# 19G. RESILIENCE DIAGNOSIS
+#============================================================
+
+diagnosis = ResilienceDiagnoser().diagnose(resilience_report)
+
+print()
+print("========== RESILIENCE DIAGNOSIS ==========")
+print("Diagnosis Status:", diagnosis["status"])
+print("Vulnerable Branches Diagnosed:", diagnosis["diagnosis_count"])
+
+for item in diagnosis["diagnoses"]:
+    print("\nBranch:", item["branch"])
+    print("Attack Sequence:", " -> ".join(item["attack_sequence"]))
+    print("Vulnerable Scenarios:", item["vulnerable_scenarios"])
+    print("Explanation:", item["explanation"])
+    print("Root Cause Details:")
+
+    for cause in item["root_cause_details"]:
+        print(f'  {cause["event"]}: {cause["explanation"]}')
+
+print("\nRecommended Controls:")
+for item in diagnosis["recommendations"]:
+    print(
+        f'Priority {item["priority"]}: '
+        f'{item["control"]} - {item["recommendation"]}'
+    )
+
+print("==========================================")
+
 # ============================================================
-# 19G. DISPLAY ATTACK PATH EXPLANATION
+# 19H. DISPLAY ATTACK PATH EXPLANATION
 # ============================================================
 
 print()
