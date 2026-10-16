@@ -122,4 +122,22 @@ class MitigationEngine:
         return {
             "controls": list(dict.fromkeys(controls)),
             "actions": actions
-        }    
+        }  
+
+    def validate_mitigation(self, event_type):
+        mitigation = self.get_mitigation(event_type)
+
+        if mitigation["control"] == "MANUAL_REVIEW":
+            return {
+                "valid": False,
+                "event": event_type,
+                "control": mitigation["control"],
+                "reason": "No predefined mitigation mapping exists."
+            }
+
+        return {
+            "valid": True,
+            "event": event_type,
+            "control": mitigation["control"],
+            "reason": "A predefined mitigation mapping exists."
+        }      
