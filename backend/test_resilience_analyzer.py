@@ -14,6 +14,48 @@ def create_event(event_id, event_type, parent_event_ids=None):
     event.event_id = event_id
     return event
 
+def test_scenario_summary_metrics():
+    root = create_event("RA-101", "GOAL_HIJACKING")
+
+    memory = create_event(
+        "RA-102",
+        "SESSION_CONTEXT_CONTAMINATION",
+        ["RA-101"]
+    )
+
+    trust = create_event(
+        "RA-103",
+        "INTER_AGENT_TRUST_ESCALATION",
+        ["RA-102"]
+    )
+
+    mcp = create_event(
+        "RA-104",
+        "MCP_TOOL_ABUSE",
+        ["RA-101"]
+    )
+
+    paths = [
+        [root, memory, trust],
+        [root, mcp]
+    ]
+
+    report = ResilienceAnalyzer().analyze(paths)
+
+    assert "scenario_summary" in report
+    assert len(report["scenario_summary"]) == report["scenario_count"]
+
+    for scenario in report["scenario_summary"]:
+        assert scenario["total_branches"] == len(paths)
+        assert 0 <= scenario["resilience_percentage"] <= 100
+        assert scenario["vulnerable_branch_count"] >= 0
+
+    first_scenario = report["scenario_summary"][0]
+
+    assert first_scenario["scenario"] == 1
+    assert first_scenario["disabled_controls"] == []
+    assert first_scenario["vulnerable_branch_count"] == 0
+    assert first_scenario["resilience_percentage"] == 100.0    
 
 def main():
     root = create_event("RA-001", "GOAL_HIJACKING")

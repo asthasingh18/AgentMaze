@@ -105,6 +105,22 @@ class ResilienceAnalyzer:
         
         
         blocked_tests = total_tests - vulnerable_tests
+        scenario_summary = [
+            {
+                "scenario": result["scenario"],
+                "disabled_controls": result["disabled_controls"],
+                "vulnerable_branch_count": result["vulnerable_branch_count"],
+                "total_branches": len(paths),
+                "resilience_percentage": round(
+                    (
+                        (len(paths) - result["vulnerable_branch_count"])
+                        / len(paths)
+                    ) * 100,
+                    2
+                ) if paths else 0
+            }
+            for result in results
+        ]
 
         return {
             "status": "GENERATED",
@@ -117,6 +133,7 @@ class ResilienceAnalyzer:
                 (blocked_tests / total_tests) * 100, 2
             ) if total_tests else 0,
             "results": results,
+            "scenario_summary": scenario_summary,
             "vulnerable_branches": vulnerable_branches,
             "overall_status": (
                 "VULNERABLE" if vulnerable_tests else "RESILIENT"
