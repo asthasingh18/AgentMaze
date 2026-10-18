@@ -3,6 +3,7 @@ from app.security.path_risk_scorer import PathRiskScorer
 from app.security.path_explainer import PathExplainer
 from app.security.mitigation_engine import MitigationEngine
 from app.security.retest_engine import RetestEngine
+from app.security.security_analytics import SecurityAnalytics
 
 
 class SecurityReport:
@@ -12,6 +13,7 @@ class SecurityReport:
         self.path_explainer = PathExplainer()
         self.mitigation_engine = MitigationEngine()
         self.retest_engine = RetestEngine()
+        self.security_analytics = SecurityAnalytics()
 
     def generate_report(self, path):
 
@@ -25,19 +27,12 @@ class SecurityReport:
                 "retest": None
             }
 
-        # 1. Assess risk
         risk = self.risk_scorer.score_path(path)
-
-        # 2. Explain the path
         explanation = self.path_explainer.explain_path(path)
-
-        # 3. Generate mitigation recommendations
         mitigation_plan = self.mitigation_engine.generate_plan(path)
 
-        # 4. Test before mitigation
         before_retest = RetestEngine().retest_path(path)
 
-        # 5. Apply controls and re-test
         self.retest_engine.apply_mitigation(mitigation_plan)
         after_retest = self.retest_engine.retest_path(path)
 
@@ -72,24 +67,14 @@ class SecurityReport:
         branches = []
 
         for index, path in enumerate(paths, start=1):
-
-            # 1. Assess individual branch risk.
             risk = self.risk_scorer.score_path(path)
-
-            # 2. Generate branch-specific mitigation recommendations.
             mitigation_plan = self.mitigation_engine.generate_plan(path)
-
-            # 3. Test the branch before mitigation.
             before_retest = RetestEngine().retest_path(path)
 
-            # 4. Apply only this branch's controls.
             branch_retest_engine = RetestEngine()
             branch_retest_engine.apply_mitigation(mitigation_plan)
-
-            # 5. Re-test the branch.
             after_retest = branch_retest_engine.retest_path(path)
 
-            # 6. Extract mitigation effectiveness details.
             blocked = after_retest["status"] == "PASS"
 
             branch_effectiveness = {
@@ -115,17 +100,13 @@ class SecurityReport:
             })
 
         effective_count = sum(
-            1
-            for branch in branches
+            1 for branch in branches
             if branch["mitigation_effectiveness"]["blocked"]
         )
 
         effectiveness_percentage = round(
-            (effective_count / len(branches)) * 100,
-            2
+            (effective_count / len(branches)) * 100, 2
         )
-
-        all_passed = effective_count == len(branches)
 
         return {
             "status": "GENERATED",
@@ -134,10 +115,11 @@ class SecurityReport:
             "effective_branches": effective_count,
             "ineffective_branches": len(branches) - effective_count,
             "effectiveness_percentage": effectiveness_percentage,
-            "overall_status": "PASS" if all_passed else "FAIL"
+            "overall_status": (
+                "PASS" if effective_count == len(branches) else "FAIL"
+            )
         }
 
-    
     def generate_adaptive_report(self, paths, disabled_controls=None):
 
         if not paths:
@@ -148,7 +130,6 @@ class SecurityReport:
                 "effectiveness_percentage": 0
             }
 
-        # Default experiment: disable the root goal-validation control.
         if disabled_controls is None:
             disabled_controls = {"GOAL_VALIDATION"}
         else:
@@ -157,18 +138,13 @@ class SecurityReport:
         branches = []
 
         for index, path in enumerate(paths, start=1):
-
-            # 1. Generate mitigation controls for this branch.
             mitigation_plan = self.mitigation_engine.generate_plan(path)
 
-            # 2. Configure the branch's controls.
             adaptive_engine = RetestEngine()
             adaptive_engine.apply_mitigation(mitigation_plan)
 
-            # 3. Temporarily disable selected controls and retest.
             result = adaptive_engine.retest_path_with_disabled_controls(
-                path,
-                disabled_controls
+                path, disabled_controls
             )
 
             blocked = result["status"] == "PASS"
@@ -209,4 +185,6 @@ class SecurityReport:
                 "PASS" if effective_count == total else "FAIL"
             )
         }
-    
+
+    def generate_analytics_report(self, paths):
+        return self.security_analytics.generate_summary(paths)
