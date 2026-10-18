@@ -4,6 +4,7 @@ from app.security.path_explainer import PathExplainer
 from app.security.mitigation_engine import MitigationEngine
 from app.security.retest_engine import RetestEngine
 from app.security.security_analytics import SecurityAnalytics
+from app.security.recovery_evaluator import RecoveryEvaluator
 
 
 class SecurityReport:
@@ -14,6 +15,7 @@ class SecurityReport:
         self.mitigation_engine = MitigationEngine()
         self.retest_engine = RetestEngine()
         self.security_analytics = SecurityAnalytics()
+        self.recovery_evaluator = RecoveryEvaluator()
 
     def generate_report(self, path):
 
@@ -188,3 +190,9 @@ class SecurityReport:
 
     def generate_analytics_report(self, paths):
         return self.security_analytics.generate_summary(paths)
+    
+    def generate_recovery_report(self, paths, failed_controls=None):
+        return self.recovery_evaluator.evaluate(
+            paths,
+            failed_controls=failed_controls,
+        )
