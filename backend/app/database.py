@@ -256,39 +256,46 @@ def agent_has_tool(agent_id, tool_id):
 # Save Attack Event
 # --------------------------------------------------
 
+
 def save_attack_event(event):
 
     connection = get_connection()
 
-    cursor = connection.cursor()
+    try:
+        cursor = connection.cursor()
 
-    cursor.execute("""
-        INSERT INTO attack_events (
-            event_id,
-            timestamp,
-            event_type,
-            agent_id,
-            description,
-            severity,
-            source,
-            target
-        )
+        cursor.execute("""
+            INSERT INTO attack_events (
+                event_id,
+                timestamp,
+                event_type,
+                agent_id,
+                description,
+                severity,
+                source,
+                target
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            event.event_id,
+            event.timestamp,
+            event.event_type,
+            event.agent_id,
+            event.description,
+            event.severity,
+            event.source,
+            event.target
+        ))
 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        event.event_id,
-        event.timestamp,
-        event.event_type,
-        event.agent_id,
-        event.description,
-        event.severity,
-        event.source,
-        event.target
-    ))
+        connection.commit()
 
-    connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
 
-    connection.close()
+    finally:
+        connection.close()
+
 # --------------------------------------------------
 # Save Event Dependency
 # --------------------------------------------------
