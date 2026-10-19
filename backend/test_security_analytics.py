@@ -82,3 +82,21 @@ def test_security_report_integrates_analytics():
     assert "risk_distribution" in report
     assert "event_frequency" in report
     assert "blocking_percentage" in report    
+
+
+def test_unknown_event_requires_manual_review():
+    unknown_event = create_event(
+        "SA-UNKNOWN-001",
+        "UNKNOWN_EVENT",
+        "HIGH"
+    )
+
+    report = SecurityAnalytics().generate_summary(
+        [[unknown_event]]
+    )
+
+    assert report["status"] == "GENERATED"
+    assert report["manual_review_paths"] == 1
+    assert report["evaluated_paths"] == 0
+    assert report["blocked_paths"] == 0
+    assert report["exploitable_paths"] == 0

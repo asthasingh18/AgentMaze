@@ -43,6 +43,7 @@ class SecurityAnalytics:
         scores = []
         blocked_paths = 0
         exploitable_paths = 0
+        manual_review_paths = 0
         control_failure_counter = Counter()
 
         for path in paths:
@@ -62,10 +63,14 @@ class SecurityAnalytics:
 
             if result["status"] == "PASS":
                 blocked_paths += 1
+
+            elif result["status"] == "UNKNOWN_EVENT":
+                manual_review_paths += 1
+
             else:
                 exploitable_paths += 1
 
-                # Record required controls for events in failed paths.
+                # Record required controls for recognized events in failed paths.
                 for event in path:
                     control = retest_engine.get_required_control(
                         event.event_type
@@ -73,7 +78,6 @@ class SecurityAnalytics:
 
                     if control:
                         control_failure_counter[control] += 1
-
         path_count = len(paths)
         blocking_percentage = round(
             (blocked_paths / path_count) * 100, 2
@@ -94,5 +98,7 @@ class SecurityAnalytics:
             "blocking_percentage": blocking_percentage,
             "potential_control_weaknesses": dict(
                 sorted(control_failure_counter.items())
-            )
+            ),
+            "manual_review_paths": manual_review_paths,
+            "evaluated_paths": blocked_paths + exploitable_paths    
         }

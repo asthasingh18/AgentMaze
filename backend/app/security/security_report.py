@@ -76,16 +76,24 @@ class SecurityReport:
             branch_retest_engine = RetestEngine()
             branch_retest_engine.apply_mitigation(mitigation_plan)
             after_retest = branch_retest_engine.retest_path(path)
+            
+            retest_status = after_retest["status"]
 
-            blocked = after_retest["status"] == "PASS"
+            if retest_status == "PASS":
+                effectiveness = "EFFECTIVE"
+                blocked = True
+            elif retest_status == "UNKNOWN_EVENT":
+                effectiveness = "MANUAL_REVIEW"
+                blocked = False
+            else:
+                effectiveness = "INEFFECTIVE"
+                blocked = False
 
             branch_effectiveness = {
                 "blocked": blocked,
                 "blocked_at": after_retest.get("blocked_at"),
                 "blocked_control": after_retest.get("blocked_control"),
-                "effectiveness": (
-                    "EFFECTIVE" if blocked else "INEFFECTIVE"
-                )
+                "effectiveness": effectiveness,
             }
 
             branches.append({
@@ -103,19 +111,33 @@ class SecurityReport:
 
         effective_count = sum(
             1 for branch in branches
-            if branch["mitigation_effectiveness"]["blocked"]
+            if branch["mitigation_effectiveness"]["effectiveness"] == "EFFECTIVE"
         )
 
-        effectiveness_percentage = round(
-            (effective_count / len(branches)) * 100, 2
+        ineffective_count = sum(
+            1 for branch in branches
+            if branch["mitigation_effectiveness"]["effectiveness"] == "INEFFECTIVE"
         )
+
+        manual_review_count = sum(
+            1 for branch in branches
+            if branch["mitigation_effectiveness"]["effectiveness"] == "MANUAL_REVIEW"
+        )
+
+        evaluated_count = effective_count + ineffective_count
+
+        effectiveness_percentage = round(
+            (effective_count / evaluated_count) * 100, 2
+        ) if evaluated_count else 0
 
         return {
             "status": "GENERATED",
             "branch_count": len(branches),
             "branches": branches,
             "effective_branches": effective_count,
-            "ineffective_branches": len(branches) - effective_count,
+            "ineffective_branches": ineffective_count,
+            "manual_review_branches": manual_review_count,
+            "evaluated_branches": evaluated_count,
             "effectiveness_percentage": effectiveness_percentage,
             "overall_status": (
                 "PASS" if effective_count == len(branches) else "FAIL"

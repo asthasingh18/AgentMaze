@@ -38,3 +38,23 @@ assert report["before_retest"]["status"] == "FAIL"
 assert report["after_retest"]["status"] == "PASS"
 
 print("SECURITY REPORT TEST PASSED")
+
+
+def test_unknown_event_requires_manual_review():
+    from types import SimpleNamespace
+
+    report = SecurityReport()
+
+    unknown_event = SimpleNamespace(
+        event_id="TEST-UNKNOWN-REPORT-001",
+        event_type="UNKNOWN_EVENT",
+        agent_id="TEST-AGENT",
+        severity="HIGH",
+    )
+
+    result = report.generate_branch_report([[unknown_event]])
+
+    assert result["status"] == "GENERATED"
+    assert result["manual_review_branches"] == 1
+    assert result["evaluated_branches"] == 0
+    assert result["effectiveness_percentage"] == 0
