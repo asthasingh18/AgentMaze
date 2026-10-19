@@ -1,119 +1,100 @@
+
 class RetestEngine:
 
     def __init__(self):
-
         self.blocked_controls = set()
-
-    # --------------------------------------------------------
-    # APPLY MITIGATION
-    # --------------------------------------------------------
-
-    def apply_mitigation(self, mitigation_plan):
-
-        for action in mitigation_plan["actions"]:
-
-            self.blocked_controls.add(
-                action["control"]
-            )
 
     # --------------------------------------------------------
     # CONTROL MAPPING
     # --------------------------------------------------------
 
     def get_required_control(self, event_type):
-
         control_map = {
-
-            "GOAL_HIJACKING":
-                "GOAL_VALIDATION",
-
-            "SESSION_CONTEXT_CONTAMINATION":
-                "MEMORY_PROVENANCE_CHECK",
-
-            "INTER_AGENT_TRUST_ESCALATION":
-                "CAPABILITY_VERIFICATION",
-
-            "MCP_TOOL_ABUSE":
-                "MCP_PROVENANCE_CHECK",
-
-            "MCP_PLUGIN_ABUSE":
-                "MCP_PROVENANCE_CHECK",
-            
-            "CAPABILITY_ABUSE":
-                "CAPABILITY_ENFORCEMENT"
+            "GOAL_HIJACKING": "GOAL_VALIDATION",
+            "SESSION_CONTEXT_CONTAMINATION": "MEMORY_PROVENANCE_CHECK",
+            "INTER_AGENT_TRUST_ESCALATION": "CAPABILITY_VERIFICATION",
+            "MCP_TOOL_ABUSE": "MCP_PROVENANCE_CHECK",
+            "MCP_PLUGIN_ABUSE": "MCP_PROVENANCE_CHECK",
+            "CAPABILITY_ABUSE": "CAPABILITY_ENFORCEMENT",
         }
 
         return control_map.get(event_type)
+
+    # --------------------------------------------------------
+    # APPLY MITIGATION
+    # --------------------------------------------------------
+
+    def apply_mitigation(self, mitigation_plan):
+        for action in mitigation_plan["actions"]:
+            self.blocked_controls.add(action["control"])
 
     # --------------------------------------------------------
     # CHECK WHETHER EVENT IS BLOCKED
     # --------------------------------------------------------
 
     def is_blocked(self, event_type):
+        required_control = self.get_required_control(event_type)
 
-        required_control = self.get_required_control(
-            event_type
+        return (
+            required_control is not None
+            and required_control in self.blocked_controls
         )
-
-        return required_control in self.blocked_controls
 
     # --------------------------------------------------------
     # RE-TEST ATTACK PATH
     # --------------------------------------------------------
 
     def retest_path(self, path):
-
         if not path:
-
             return {
                 "status": "PASS",
                 "original_length": 0,
                 "executed_steps": [],
                 "blocked_at": None,
-                "message": "No attack path to test."
+                "blocked_control": None,
+                "message": "No attack path to test.",
             }
 
         executed_steps = []
 
         for event in path:
+            control = self.get_required_control(event.event_type)
 
-            control = self.get_required_control(
-                event.event_type
-            )
+            # Unknown event types require review rather than
+            # being classified as ordinary exploitable steps.
+            if control is None:
+                return {
+                    "status": "UNKNOWN_EVENT",
+                    "original_length": len(path),
+                    "executed_steps": executed_steps,
+                    "blocked_at": None,
+                    "blocked_control": None,
+                    "unknown_event": event.event_type,
+                    "message": (
+                        f"Unknown attack event '{event.event_type}'. "
+                        "Manual security review is required."
+                    ),
+                }
 
-            # ------------------------------------------------
-            # MITIGATION BLOCKED THE ATTACK
-            # ------------------------------------------------
-
+            # Mitigation blocked the attack.
             if self.is_blocked(event.event_type):
-
                 return {
                     "status": "PASS",
                     "original_length": len(path),
                     "executed_steps": executed_steps,
                     "blocked_at": event.event_type,
                     "blocked_control": control,
-                    "message": (
-                        f"Attack blocked at "
-                        f"{event.event_type}"
-                    )
+                    "message": f"Attack blocked at {event.event_type}",
                 }
 
-            # ------------------------------------------------
-            # ATTACK STEP SUCCESSFULLY EXECUTED
-            # ------------------------------------------------
-
+            # Attack step executed without an effective control.
             executed_steps.append({
                 "event_id": event.event_id,
                 "event_type": event.event_type,
                 "agent": event.agent_id,
                 "severity": event.severity,
-                "status": "EXECUTED"
+                "status": "EXECUTED",
             })
-
-        # ----------------------------------------------------
-        # NO MITIGATION STOPPED THE ATTACK
-        # ----------------------------------------------------
 
         return {
             "status": "FAIL",
@@ -121,13 +102,13 @@ class RetestEngine:
             "executed_steps": executed_steps,
             "blocked_at": None,
             "blocked_control": None,
-            "message": "Attack path remains exploitable."
+            "message": "Attack path remains exploitable.",
         }
 
     def retest_path_with_disabled_controls(self, path, disabled_controls):
         """
-        Retest an attack path while temporarily disabling selected controls.
-        Does not modify the engine's configured blocked controls.
+        Retest with selected controls temporarily disabled.
+        Restore the original control set even if retesting raises an error.
         """
         original_controls = self.blocked_controls.copy()
 
@@ -135,4 +116,4 @@ class RetestEngine:
             self.blocked_controls.difference_update(disabled_controls)
             return self.retest_path(path)
         finally:
-            self.blocked_controls = original_controls    
+            self.blocked_controls = original_controls

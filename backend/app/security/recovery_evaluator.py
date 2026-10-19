@@ -61,10 +61,19 @@ class RecoveryEvaluator:
                 recovery_status = (
                     "RECOVERED" if recovered else "RECOVERY_FAILED"
                 )
+            elif (
+                baseline["status"] == "UNKNOWN_EVENT"
+                or failure_result["status"] == "UNKNOWN_EVENT"
+            ):
+                recovery_result = None
+                recovered = False
+                recovery_status = "UNKNOWN_EVENT"
+
             elif failure_result["status"] == "PASS":
                 recovery_result = None
                 recovered = False
                 recovery_status = "RECOVERY_NOT_NEEDED"
+
             else:
                 recovery_result = None
                 recovered = False
@@ -99,6 +108,10 @@ class RecoveryEvaluator:
             result["recovery_status"] == "RECOVERY_NOT_NEEDED"
             for result in results
         )
+        unknown_events = sum(
+            result["recovery_status"] == "UNKNOWN_EVENT"
+            for result in results
+)
         recovery_attempts = recovery_successes + sum(
             result["recovery_status"] == "RECOVERY_FAILED"
             for result in results
@@ -121,12 +134,22 @@ class RecoveryEvaluator:
             "recovery_success_percentage": recovery_success_percentage,
             "results": results,
             "overall_status": (
-                "RECOVERED"
-                if recovery_failures == 0
-                else "RECOVERY_INCOMPLETE"
+                "RECOVERY_INCOMPLETE"
+                if recovery_failures > 0
+                else "RECOVERED"
+                if recovery_attempts > 0
+                and recovery_successes == recovery_attempts
+                else "RECOVERY_NOT_NEEDED"
+                if recovery_attempts == 0
+                and recovery_not_needed == len(results)
+                else "NOT_FULLY_EVALUATED"
             ),
             "simulation_note": (
                 "Recovery represents a simulated retest with the planned "
                 "controls re-enabled, not an actual system repair."
+            ),
+            "unknown_event_count": unknown_events,
+            "fully_evaluated_branches": (
+                len(results) - unknown_events
             ),
         }
