@@ -54,6 +54,12 @@ function App() {
   const [securityLoading, setSecurityLoading] = useState(true);
   const [securityError, setSecurityError] = useState("");
   const [severityFilter, setSeverityFilter] = useState("ALL");
+  const [eventSearch, setEventSearch] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  
+  useEffect(() => {
+  setCurrentPage(1);
+}, [severityFilter, eventSearch]);
 
   // Check backend connectivity.
   useEffect(() => {
@@ -148,49 +154,70 @@ function App() {
     };
   }, []);
 
-  // Filter events by severity.
+  // Filter events by severity and search term.
   const filteredEvents = attackEvents.filter((event) => {
-    if (severityFilter === "ALL") {
-      return true;
-    }
+    const matchesSeverity =
+      severityFilter === "ALL" ||
+      String(event.severity ?? "").toUpperCase() === severityFilter;
 
-    return (
-      String(event.severity ?? "").toUpperCase() === severityFilter
-    );
+    const searchTerm = eventSearch.trim().toLowerCase();
+
+    const matchesSearch =
+      !searchTerm ||
+      [
+        event.event_id,
+        event.event_type,
+        event.agent_id,
+        event.description,
+      ].some((value) =>
+        String(value ?? "").toLowerCase().includes(searchTerm)
+      );
+
+    return matchesSeverity && matchesSearch;
   });
 
-  const displayedEvents = filteredEvents.slice(0, 5);
-  
-const severityLevels = [
-  { label: "Critical", key: "CRITICAL" },
-  { label: "High", key: "HIGH" },
-  { label: "Medium", key: "MEDIUM" },
-  { label: "Low", key: "LOW" },
-  { label: "Info", key: "INFO" },
-];
+  const EVENTS_PER_PAGE = 5;
+  const [currentPage, setCurrentPage] = useState(1);
 
-const severityCounts = attackEvents.reduce((counts, event) => {
-  const severity = String(
-    event.severity ?? "UNKNOWN"
-  ).toUpperCase();
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEvents.length / EVENTS_PER_PAGE)
+  );
 
-  counts[severity] = (counts[severity] ?? 0) + 1;
-  return counts;
-}, {});
+  const displayedEvents = filteredEvents.slice(
+    (currentPage - 1) * EVENTS_PER_PAGE,
+    currentPage * EVENTS_PER_PAGE
+  );
 
-const criticalAlerts = severityCounts.CRITICAL ?? 0;
-const highRiskEvents = severityCounts.HIGH ?? 0;
+  const severityLevels = [
+    { label: "Critical", key: "CRITICAL" },
+    { label: "High", key: "HIGH" },
+    { label: "Medium", key: "MEDIUM" },
+    { label: "Low", key: "LOW" },
+    { label: "Info", key: "INFO" },
+  ];
 
-const otherEvents =
-  (severityCounts.MEDIUM ?? 0) +
-  (severityCounts.LOW ?? 0) +
-  (severityCounts.INFO ?? 0);
+  const severityCounts = attackEvents.reduce((counts, event) => {
+    const severity = String(
+      event.severity ?? "UNKNOWN"
+    ).toUpperCase();
 
-const maxSeverityCount = Math.max(
-  1,
-  ...severityLevels.map((level) => severityCounts[level.key] ?? 0)
-);
+    counts[severity] = (counts[severity] ?? 0) + 1;
+    return counts;
+  }, {});
 
+  const criticalAlerts = severityCounts.CRITICAL ?? 0;
+  const highRiskEvents = severityCounts.HIGH ?? 0;
+
+  const otherEvents =
+    (severityCounts.MEDIUM ?? 0) +
+    (severityCounts.LOW ?? 0) +
+    (severityCounts.INFO ?? 0);
+
+  const maxSeverityCount = Math.max(
+    1,
+    ...severityLevels.map((level) => severityCounts[level.key] ?? 0)
+  );
 
   return (
     <div className="app">
@@ -429,7 +456,6 @@ const maxSeverityCount = Math.max(
                 </p>
               </div>
 
-
               {/* Recent attack events */}
               <div className="security-events-panel">
                 <div className="security-panel-heading">
@@ -441,6 +467,18 @@ const maxSeverityCount = Math.max(
                   className="severity-filters"
                   aria-label="Filter events by severity"
                 >
+                  <input
+                    type="text"
+                    className="event-search-input"
+                    placeholder="Search by event ID, type, agent, or description..."
+                    value={eventSearch}
+                    onChange={(e) => {
+                      setEventSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    aria-label="Search attack events"
+                  />
+
                   {severityOptions.map((severity) => (
                     <button
                       key={severity}
@@ -449,7 +487,10 @@ const maxSeverityCount = Math.max(
                         severityFilter === severity ? "active" : ""
                       }`}
                       aria-pressed={severityFilter === severity}
-                      onClick={() => setSeverityFilter(severity)}
+                      onClick={() => {
+                        setSeverityFilter(severity);
+                        setCurrentPage(1);
+                      }}
                     >
                       {severity === "ALL" ? "All Events" : severity}
                     </button>
@@ -463,7 +504,7 @@ const maxSeverityCount = Math.max(
 
                 {displayedEvents.length === 0 ? (
                   <p className="security-message">
-                    No events found for this severity.
+                    No events match your current search and severity filters.
                   </p>
                 ) : (
                   <div className="security-event-list">
@@ -474,8 +515,18 @@ const maxSeverityCount = Math.max(
 
                       return (
                         <article
-                          className="security-event"
+                          className="security-event security-event-clickable"
                           key={event.event_id ?? index}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View details for ${event.event_type ?? "security event"}`}
+                          onClick={() => setSelectedEvent(event)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedEvent(event);
+                            }
+                          }}
                         >
                           <span className="event-indicator" />
 
@@ -505,6 +556,34 @@ const maxSeverityCount = Math.max(
                         </article>
                       );
                     })}
+                  </div>
+                )}
+
+                {filteredEvents.length > EVENTS_PER_PAGE && (
+                  <div className="event-pagination" aria-label="Event pages">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        setCurrentPage((page) => Math.max(1, page - 1))
+                      }
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span aria-live="polite">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        setCurrentPage((page) => Math.min(totalPages, page + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </button>
                   </div>
                 )}
               </div>
@@ -550,6 +629,113 @@ const maxSeverityCount = Math.max(
                   </div>
                 )}
               </div>
+
+              {/* Event details modal */}
+              {selectedEvent && (
+                <div
+                  className="event-details-backdrop"
+                  role="presentation"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setSelectedEvent(null);
+                    }
+                  }}
+                >
+                  <section
+                    className="event-details-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="event-details-title"
+                  >
+                    <div className="event-details-heading">
+                      <div>
+                        <span className="eyebrow">EVENT INSPECTION</span>
+                        <h3 id="event-details-title">
+                          {selectedEvent.event_type ?? "Security Event"}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="event-details-close"
+                        onClick={() => setSelectedEvent(null)}
+                        aria-label="Close event details"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="event-details-summary">
+                      <span
+                        className={`severity-badge severity-${String(
+                          selectedEvent.severity ?? "unknown"
+                        ).toLowerCase()}`}
+                      >
+                        {selectedEvent.severity ?? "UNKNOWN"}
+                      </span>
+
+                      <span className="event-details-id">
+                        ID: {selectedEvent.event_id ?? "Not provided"}
+                      </span>
+                    </div>
+
+                    <p className="event-details-description">
+                      {selectedEvent.description ??
+                        "No description available."}
+                    </p>
+
+                    <div className="event-details-grid">
+                      {[
+                        ["Timestamp", selectedEvent.timestamp],
+                        ["Agent ID", selectedEvent.agent_id],
+                        ["Source", selectedEvent.source],
+                        ["Target", selectedEvent.target],
+                        ["Relation", selectedEvent.relation],
+                      ].map(([label, value]) => (
+                        <div className="event-detail-field" key={label}>
+                          <span>{label}</span>
+                          <strong>
+                            {value === undefined ||
+                            value === null ||
+                            value === ""
+                              ? "Not provided"
+                              : String(value)}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="event-detail-related">
+                      <h4>Related Event IDs</h4>
+
+                      {Array.isArray(selectedEvent.parent_event_ids) &&
+                      selectedEvent.parent_event_ids.length > 0 ? (
+                        <div className="event-related-list">
+                          {selectedEvent.parent_event_ids.map((id, index) => (
+                            <span key={`${String(id)}-${index}`}>
+                              {String(id)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>
+                          No related event IDs provided for this event.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="event-details-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setSelectedEvent(null)}
+                      >
+                        Close details
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              )}
             </>
           )}
         </section>
