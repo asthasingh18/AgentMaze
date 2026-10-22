@@ -8,11 +8,23 @@ from app.database import get_saved_attack_paths
 from app.agents.agent import Agent
 from app.tools.tool import Tool
 from app.simulation.environment import Environment
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="AgentMaze API",
     description="API for the AgentMaze agent security simulation.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
