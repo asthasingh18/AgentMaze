@@ -1328,3 +1328,619 @@
   }
 }
 
+/* Attack Path Explorer */
+.attack-path-explorer {
+  min-width: 0;
+}
+
+.attack-path-subtitle {
+  margin: 6px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.attack-path-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.attack-path-card {
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.attack-path-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.attack-path-card-header > div {
+  min-width: 0;
+}
+
+.attack-path-card-header strong {
+  color: #e2e8f0;
+  overflow-wrap: anywhere;
+}
+
+.attack-path-description {
+  margin: 8px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.attack-path-risk {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.attack-path-risk.risk-high,
+.attack-path-risk.risk-critical {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+}
+
+.attack-path-risk.risk-medium {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fcd34d;
+}
+
+.attack-path-risk.risk-low {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+}
+
+.attack-path-risk.risk-pending,
+.attack-path-risk.risk-unknown {
+  color: #cbd5e1;
+}
+
+.attack-chain {
+  margin-top: 18px;
+}
+
+.attack-chain-step {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.attack-chain-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.attack-chain-number {
+  display: flex;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.attack-chain-event {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.attack-chain-event strong {
+  color: #e2e8f0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.attack-chain-event span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.attack-chain-connector {
+  display: flex;
+  align-items: stretch;
+  height: 24px;
+  padding-left: 26px;
+}
+
+.attack-chain-connector span {
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    rgba(96, 165, 250, 0.7),
+    rgba(96, 165, 250, 0.2)
+  );
+}
+
+.attack-path-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .attack-path-card {
+    padding: 13px;
+  }
+
+  .attack-path-card-header {
+    flex-direction: column;
+  }
+
+  .attack-path-risk {
+    align-self: flex-start;
+  }
+}
+/* Attack Path Explorer — clickable cards */
+
+.attack-path-card-clickable {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease,
+    transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.attack-path-card-clickable:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(30, 41, 59, 0.75);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.attack-path-card-clickable:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+.attack-path-open-hint {
+  color: #60a5fa;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.attack-path-card-clickable:hover .attack-path-open-hint {
+  color: #93c5fd;
+}
+
+/* Attack Path Details Popup */
+
+.attack-path-backdrop {
+  z-index: 1001;
+}
+
+.attack-path-details-modal {
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 18px;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(37, 99, 235, 0.09),
+      transparent 38%
+    ),
+    #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  animation: attackPathModalEnter 0.22s ease-out;
+}
+
+.attack-path-details-modal .event-details-heading {
+  align-items: flex-start;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.attack-path-details-modal .event-details-heading h3 {
+  margin-top: 8px;
+  color: #f1f5f9;
+  font-size: 22px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.attack-path-details-modal .eyebrow {
+  color: #60a5fa;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.attack-path-details-modal .event-details-close {
+  flex-shrink: 0;
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 9px;
+  background: rgba(30, 41, 59, 0.8);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.attack-path-details-modal .event-details-close:hover {
+  color: #ffffff;
+  background: rgba(71, 85, 105, 0.8);
+}
+
+.attack-path-details-modal .event-details-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.attack-path-details-modal .event-details-id {
+  color: #94a3b8;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.attack-path-details-modal .event-details-description {
+  margin: 0 0 22px;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* Path statistics */
+
+.attack-path-analysis-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 28px;
+}
+
+.attack-path-analysis-stats .event-detail-field {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.attack-path-analysis-stats .event-detail-field span {
+  display: block;
+  margin-bottom: 8px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.attack-path-analysis-stats .event-detail-field strong {
+  color: #e2e8f0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+/* Ordered attack event sequence */
+
+.attack-path-modal-sequence {
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.attack-path-modal-sequence h4 {
+  margin: 0 0 18px;
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.attack-path-modal-sequence > p {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.attack-path-details-modal .attack-chain {
+  margin-top: 0;
+}
+
+.attack-path-details-modal .attack-chain-node {
+  gap: 14px;
+  padding: 14px;
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(30, 41, 59, 0.55);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.attack-path-details-modal .attack-chain-node:hover {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.attack-path-details-modal .attack-chain-number {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  background: rgba(59, 130, 246, 0.13);
+  color: #93c5fd;
+}
+
+.attack-path-details-modal .attack-chain-event {
+  flex: 1;
+  gap: 6px;
+}
+
+.attack-path-details-modal .attack-chain-event strong {
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.attack-path-details-modal .attack-chain-event span {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.attack-path-details-modal .attack-chain-connector {
+  height: 28px;
+  padding-left: 29px;
+}
+
+.attack-path-details-modal .attack-chain-connector span {
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    #60a5fa,
+    rgba(96, 165, 250, 0.15)
+  );
+}
+
+.attack-path-details-modal .event-details-actions {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.attack-path-details-modal .event-details-actions button {
+  min-width: 130px;
+}
+
+/* Popup animation */
+
+@keyframes attackPathModalEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Mobile responsiveness */
+
+@media (max-width: 520px) {
+  .attack-path-details-modal {
+    width: calc(100vw - 20px);
+    max-height: 90vh;
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .attack-path-details-modal .event-details-heading h3 {
+    font-size: 18px;
+  }
+
+  .attack-path-analysis-stats {
+    gap: 8px;
+  }
+
+  .attack-path-analysis-stats .event-detail-field {
+    padding: 12px;
+  }
+
+  .attack-path-details-modal .attack-chain-node {
+    gap: 10px;
+    padding: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attack-path-card-clickable,
+  .attack-path-open-hint,
+  .attack-path-details-modal,
+  .attack-path-details-modal .attack-chain-node {
+    animation: none;
+    transition: none;
+  }
+}
+/* Attack Path Analysis */
+
+.attack-path-analysis {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.attack-path-analysis h4 {
+  margin: 0 0 16px;
+  color: #f1f5f9;
+  font-size: 16px;
+}
+
+.attack-path-analysis h5 {
+  margin: 22px 0 12px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.attack-analysis-risk {
+  padding: 15px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.55);
+}
+
+.attack-analysis-label {
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.attack-analysis-risk p,
+.attack-analysis-observation p {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.attack-analysis-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.attack-analysis-metric {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.attack-analysis-metric span {
+  display: block;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.attack-analysis-metric strong {
+  display: block;
+  margin-top: 8px;
+  color: #e2e8f0;
+  font-size: 22px;
+}
+
+.attack-analysis-observations {
+  display: grid;
+  gap: 10px;
+}
+
+.attack-analysis-observation {
+  padding: 14px;
+  border-left: 3px solid #60a5fa;
+  border-radius: 0 9px 9px 0;
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.attack-analysis-observation strong {
+  color: #e2e8f0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .attack-analysis-overview {
+    grid-template-columns: 1fr;
+  }
+}
+/* Event transition analysis */
+
+.attack-analysis-transitions {
+  display: grid;
+  gap: 10px;
+}
+
+.attack-analysis-transition {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.attack-analysis-transition > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.attack-analysis-transition > div > span {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.attack-analysis-transition strong {
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.attack-analysis-transition small {
+  color: #94a3b8;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.attack-transition-arrow {
+  color: #60a5fa;
+  font-size: 22px;
+}
+
+@media (max-width: 480px) {
+  .attack-analysis-transition {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .attack-analysis-transition strong {
+    font-size: 10px;
+  }
+}

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import "./App.css";
 
@@ -56,10 +55,7 @@ function App() {
   const [severityFilter, setSeverityFilter] = useState("ALL");
   const [eventSearch, setEventSearch] = useState("");
   const [selectedEvent, setSelectedEvent] = useState(null);
-  
-  useEffect(() => {
-  setCurrentPage(1);
-}, [severityFilter, eventSearch]);
+  const [selectedPath, setSelectedPath] = useState(null);
 
   // Check backend connectivity.
   useEffect(() => {
@@ -154,6 +150,11 @@ function App() {
     };
   }, []);
 
+  // Reset pagination when filters change.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [severityFilter, eventSearch]);
+
   // Filter events by severity and search term.
   const filteredEvents = attackEvents.filter((event) => {
     const matchesSeverity =
@@ -218,6 +219,136 @@ function App() {
     1,
     ...severityLevels.map((level) => severityCounts[level.key] ?? 0)
   );
+
+  // Prepare the events for the selected attack path.
+  const selectedPathEvents = Array.isArray(selectedPath?.events)
+    ? [...selectedPath.events]
+        .filter((event) => event && typeof event === "object")
+        .sort((a, b) => {
+          const orderA = Number(a.event_order ?? 0);
+          const orderB = Number(b.event_order ?? 0);
+
+          return orderA - orderB;
+        })
+    : [];
+
+  const attackPathAnalysis = (() => {
+  const events = selectedPathEvents;
+
+  // Normalize the recorded event types
+  const eventTypes = events.map((event) =>
+    String(event.event_type ?? "UNKNOWN").toUpperCase()
+  );
+
+  const uniqueEventTypes = [...new Set(eventTypes)];
+
+  const risk = String(
+    selectedPath?.risk_level ?? "UNKNOWN"
+  ).toUpperCase();
+
+  // Interpret the risk assigned by the existing system
+  let riskExplanation =
+    "The recorded path does not provide enough information to interpret its risk level.";
+
+  if (risk === "CRITICAL") {
+    riskExplanation =
+      "The path is marked Critical by the existing system. Review the recorded sequence and affected capabilities.";
+  } else if (risk === "HIGH") {
+    riskExplanation =
+      "The path is marked High by the existing system. Review the event sequence for possible security boundary violations.";
+  } else if (risk === "MEDIUM") {
+    riskExplanation =
+      "The path is marked Medium by the existing system. Review the recorded events to understand the potential impact.";
+  } else if (risk === "LOW") {
+    riskExplanation =
+      "The path is marked Low by the existing system. Review the recorded sequence and its context.";
+  } else if (risk === "PENDING") {
+    riskExplanation =
+      "Risk assessment is pending. Do not interpret this path as having a confirmed risk level.";
+  }
+
+  // Descriptions of recognized event types
+  const eventDescriptions = {
+    GOAL_HIJACKING:
+      "The recorded event indicates that an agent's intended goal may have been redirected.",
+    SESSION_CONTEXT_CONTAMINATION:
+      "The recorded event indicates that session context may have been contaminated.",
+    INTER_AGENT_TRUST_ESCALATION:
+      "The recorded event indicates a possible escalation of trust between agents."
+  };
+
+  const observations = uniqueEventTypes.map((type) => ({
+    type,
+    description:
+      eventDescriptions[type] ??
+      "No specific interpretation is configured for this event type. Inspect its recorded details."
+  }));
+
+  // Analyze transitions between consecutive recorded events
+  const transitions = events.slice(1).map((event, index) => ({
+    from: String(
+      events[index].event_type ?? "UNKNOWN"
+    ).toUpperCase(),
+    to: String(event.event_type ?? "UNKNOWN").toUpperCase(),
+    fromId: events[index].event_id ?? "Unknown ID",
+    toId: event.event_id ?? "Unknown ID"
+  }));
+
+  // Recognize a pattern only when all required events occur
+  // consecutively in the recorded sequence.
+  const sequencePatterns = [
+    {
+      events: [
+        "GOAL_HIJACKING",
+        "SESSION_CONTEXT_CONTAMINATION",
+        "INTER_AGENT_TRUST_ESCALATION"
+      ],
+      title: "Goal hijacking and trust escalation sequence",
+      description:
+        "The recorded sequence contains goal hijacking followed by session context contamination and inter-agent trust escalation. Review the event details to determine how these events were connected."
+    },
+    {
+      events: [
+        "GOAL_HIJACKING",
+        "INTER_AGENT_TRUST_ESCALATION"
+      ],
+      title: "Goal hijacking followed by trust escalation",
+      description:
+        "The recorded sequence contains goal hijacking immediately followed by inter-agent trust escalation. Inspect the transition and the agent capabilities involved."
+    },
+    {
+      events: [
+        "SESSION_CONTEXT_CONTAMINATION",
+        "INTER_AGENT_TRUST_ESCALATION"
+      ],
+      title: "Context contamination followed by trust escalation",
+      description:
+        "The recorded sequence contains session context contamination immediately followed by inter-agent trust escalation. Review whether the context influenced a subsequent agent decision."
+    }
+  ];
+
+  const detectedPatterns = sequencePatterns.filter((pattern) => {
+    const patternLength = pattern.events.length;
+
+    return eventTypes.some((_, startIndex) =>
+      pattern.events.every(
+        (type, patternIndex) =>
+          eventTypes[startIndex + patternIndex] === type
+      ) &&
+      startIndex + patternLength <= eventTypes.length
+    );
+  });
+
+  return {
+    risk,
+    riskExplanation,
+    observations,
+    eventCount: events.length,
+    uniqueEventCount: uniqueEventTypes.length,
+    transitions,
+    detectedPatterns
+  };
+})();
 
   return (
     <div className="app">
@@ -357,9 +488,7 @@ function App() {
               <h2>Security Overview</h2>
             </div>
 
-            <p>
-              Insights from your connected AgentMaze backend.
-            </p>
+            <p>Insights from your connected AgentMaze backend.</p>
           </div>
 
           {securityLoading ? (
@@ -372,6 +501,7 @@ function App() {
             </p>
           ) : (
             <>
+              {/* Overview statistics */}
               <div className="security-stats">
                 <article className="security-stat-card">
                   <span>ATTACK EVENTS</span>
@@ -386,11 +516,14 @@ function App() {
                 </article>
               </div>
 
+              {/* Severity distribution */}
               <div className="severity-chart-panel">
                 <div className="severity-chart-heading">
                   <div>
                     <h3>Severity Distribution</h3>
-                    <p>Breakdown of loaded attack events by severity</p>
+                    <p>
+                      Breakdown of loaded attack events by severity
+                    </p>
                   </div>
 
                   <span className="chart-total">
@@ -424,13 +557,19 @@ function App() {
                     const percentage = (count / maxSeverityCount) * 100;
 
                     return (
-                      <div className="severity-chart-row" key={level.key}>
+                      <div
+                        className="severity-chart-row"
+                        key={level.key}
+                      >
                         <div className="severity-chart-label">
                           <span>{level.label}</span>
                           <strong>
                             {count} ·{" "}
                             {attackEvents.length > 0
-                              ? ((count / attackEvents.length) * 100).toFixed(1)
+                              ? (
+                                  (count / attackEvents.length) *
+                                  100
+                                ).toFixed(1)
                               : "0.0"}
                             %
                           </strong>
@@ -560,7 +699,10 @@ function App() {
                 )}
 
                 {filteredEvents.length > EVENTS_PER_PAGE && (
-                  <div className="event-pagination" aria-label="Event pages">
+                  <div
+                    className="event-pagination"
+                    aria-label="Event pages"
+                  >
                     <button
                       type="button"
                       className="secondary-button"
@@ -571,14 +713,18 @@ function App() {
                     >
                       Previous
                     </button>
+
                     <span aria-live="polite">
                       Page {currentPage} of {totalPages}
                     </span>
+
                     <button
                       type="button"
                       className="secondary-button"
                       onClick={() =>
-                        setCurrentPage((page) => Math.min(totalPages, page + 1))
+                        setCurrentPage((page) =>
+                          Math.min(totalPages, page + 1)
+                        )
                       }
                       disabled={currentPage === totalPages}
                     >
@@ -588,11 +734,17 @@ function App() {
                 )}
               </div>
 
-              {/* Recent attack paths */}
-              <div className="security-events-panel">
+              {/* Interactive Attack Path Explorer */}
+              <div className="security-events-panel attack-path-explorer">
                 <div className="security-panel-heading">
-                  <h3>Recent Attack Paths</h3>
-                  <span>{attackPaths.length} records</span>
+                  <div>
+                    <h3>Attack Path Explorer</h3>
+                    <p className="attack-path-subtitle">
+                      Select a path to inspect its recorded event sequence.
+                    </p>
+                  </div>
+
+                  <span>{attackPaths.length} paths</span>
                 </div>
 
                 {attackPaths.length === 0 ? (
@@ -600,32 +752,127 @@ function App() {
                     No attack paths were returned by the API.
                   </p>
                 ) : (
-                  <div className="security-event-list">
-                    {attackPaths.slice(0, 5).map((path, index) => (
-                      <article
-                        className="security-event"
-                        key={path.id ?? path.path_id ?? index}
-                      >
-                        <span className="event-indicator" />
+                  <div className="attack-path-list">
+                    {attackPaths
+                      .filter(
+                        (path) => path && typeof path === "object"
+                      )
+                      .slice(0, 5)
+                      .map((path, index) => {
+                        const pathEvents = Array.isArray(path.events)
+                          ? [...path.events]
+                              .filter(
+                                (event) =>
+                                  event && typeof event === "object"
+                              )
+                              .sort(
+                                (a, b) =>
+                                  Number(a.event_order ?? 0) -
+                                  Number(b.event_order ?? 0)
+                              )
+                          : [];
 
-                        <div className="security-event-content">
-                          <strong>
-                            {path.name ??
-                              path.title ??
-                              path.path_type ??
-                              path.type ??
-                              `Attack Path ${index + 1}`}
-                          </strong>
+                        const riskLevel = String(
+                          path.risk_level ?? "UNKNOWN"
+                        ).toUpperCase();
 
-                          <p>
-                            {path.description ??
-                              path.summary ??
-                              path.attack_path ??
-                              "Attack path recorded by AgentMaze."}
-                          </p>
-                        </div>
-                      </article>
-                    ))}
+                        return (
+                          <article
+                            className="attack-path-card attack-path-card-clickable"
+                            key={path.path_id ?? path.id ?? index}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Inspect attack path ${path.path_id ?? index + 1}`}
+                            aria-haspopup="dialog"
+                            onClick={() => setSelectedPath(path)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedPath(path);
+                              }
+                            }}
+                          >
+                            <div className="attack-path-card-header">
+                              <div>
+                                <strong>
+                                  {path.name ??
+                                    path.title ??
+                                    path.path_id ??
+                                    `Attack Path ${index + 1}`}
+                                </strong>
+
+                                <p className="attack-path-description">
+                                  {path.description ??
+                                    path.summary ??
+                                    "No description available."}
+                                </p>
+                              </div>
+
+                              <span
+                                className={`attack-path-risk risk-${riskLevel.toLowerCase()}`}
+                              >
+                                {riskLevel}
+                              </span>
+                            </div>
+
+                            <div className="attack-chain">
+                              {pathEvents.length === 0 ? (
+                                <p className="security-message">
+                                  No ordered events are available for this
+                                  path.
+                                </p>
+                              ) : (
+                                pathEvents.map((event, eventIndex) => (
+                                  <div
+                                    className="attack-chain-step"
+                                    key={event.event_id ?? eventIndex}
+                                  >
+                                    <div className="attack-chain-node">
+                                      <span className="attack-chain-number">
+                                        {event.event_order ??
+                                          eventIndex + 1}
+                                      </span>
+
+                                      <div className="attack-chain-event">
+                                        <strong>
+                                          {event.event_type ??
+                                            "Unknown Event"}
+                                        </strong>
+                                        <span>
+                                          {event.event_id ?? "No event ID"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {eventIndex <
+                                      pathEvents.length - 1 && (
+                                      <div
+                                        className="attack-chain-connector"
+                                        aria-hidden="true"
+                                      >
+                                        <span />
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="attack-path-footer">
+                              <span>
+                                {pathEvents.length}{" "}
+                                {pathEvents.length === 1
+                                  ? "event"
+                                  : "events"}
+                              </span>
+
+                              <span className="attack-path-open-hint">
+                                Click to inspect →
+                              </span>
+                            </div>
+                          </article>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -708,14 +955,17 @@ function App() {
                     <div className="event-detail-related">
                       <h4>Related Event IDs</h4>
 
-                      {Array.isArray(selectedEvent.parent_event_ids) &&
-                      selectedEvent.parent_event_ids.length > 0 ? (
+                      {Array.isArray(
+                        selectedEvent.parent_event_ids
+                      ) && selectedEvent.parent_event_ids.length > 0 ? (
                         <div className="event-related-list">
-                          {selectedEvent.parent_event_ids.map((id, index) => (
-                            <span key={`${String(id)}-${index}`}>
-                              {String(id)}
-                            </span>
-                          ))}
+                          {selectedEvent.parent_event_ids.map(
+                            (id, index) => (
+                              <span key={`${String(id)}-${index}`}>
+                                {String(id)}
+                              </span>
+                            )
+                          )}
                         </div>
                       ) : (
                         <p>
@@ -729,6 +979,244 @@ function App() {
                         type="button"
                         className="secondary-button"
                         onClick={() => setSelectedEvent(null)}
+                      >
+                        Close details
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {/* Selected attack path details */}
+              {selectedPath && (
+                <div
+                  className="event-details-backdrop attack-path-backdrop"
+                  role="presentation"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                      setSelectedPath(null);
+                    }
+                  }}
+                >
+                  <section
+                    className="event-details-modal attack-path-details-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="attack-path-details-title"
+                  >
+                    <div className="event-details-heading">
+                      <div>
+                        <span className="eyebrow">
+                          ATTACK PATH INSPECTION
+                        </span>
+
+                        <h3 id="attack-path-details-title">
+                          {selectedPath.name ??
+                            selectedPath.title ??
+                            selectedPath.path_id ??
+                            "Attack Path Details"}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="event-details-close"
+                        onClick={() => setSelectedPath(null)}
+                        aria-label="Close attack path details"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="event-details-summary">
+                      <span
+                        className={`attack-path-risk risk-${String(
+                          selectedPath.risk_level ?? "unknown"
+                        ).toLowerCase()}`}
+                      >
+                        {String(
+                          selectedPath.risk_level ?? "UNKNOWN"
+                        ).toUpperCase()}
+                      </span>
+
+                      <span className="event-details-id">
+                        Path ID:{" "}
+                        {selectedPath.path_id ??
+                          selectedPath.id ??
+                          "Not provided"}
+                      </span>
+                    </div>
+
+                    <p className="event-details-description">
+                      {selectedPath.description ??
+                        selectedPath.summary ??
+                        "No description available for this path."}
+                    </p>
+
+                    <div className="attack-path-analysis-stats">
+                      <div className="event-detail-field">
+                        <span>Recorded events</span>
+                        <strong>{selectedPathEvents.length}</strong>
+                      </div>
+
+                      <div className="event-detail-field">
+                        <span>Risk level</span>
+                        <strong>
+                          {String(
+                            selectedPath.risk_level ?? "UNKNOWN"
+                          ).toUpperCase()}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="attack-path-modal-sequence">
+                      <h4>Recorded Attack Sequence</h4>
+
+                      {selectedPathEvents.length === 0 ? (
+                        <p>
+                          No event sequence is available for this path.
+                        </p>
+                      ) : (
+                        <div className="attack-chain">
+                          {selectedPathEvents.map(
+                            (event, eventIndex) => (
+                              <div
+                                className="attack-chain-step"
+                                key={
+                                  event.event_id ??
+                                  `${event.event_type ?? "event"}-${eventIndex}`
+                                }
+                              >
+                                <div className="attack-chain-node">
+                                  <span className="attack-chain-number">
+                                    {event.event_order ?? eventIndex + 1}
+                                  </span>
+
+                                  <div className="attack-chain-event">
+                                    <strong>
+                                      {event.event_type ??
+                                        "Unknown Event"}
+                                    </strong>
+
+                                    <span>
+                                      {event.event_id ?? "No event ID"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {eventIndex <
+                                  selectedPathEvents.length - 1 && (
+                                  <div
+                                    className="attack-chain-connector"
+                                    aria-hidden="true"
+                                  >
+                                    <span />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="attack-path-analysis">
+                      <h4>Attack Path Analysis</h4>
+
+                      <div className="attack-analysis-risk">
+                        <span className="attack-analysis-label">
+                          Risk interpretation
+                        </span>
+                        <p>{attackPathAnalysis.riskExplanation}</p>
+                      </div>
+
+                      <div className="attack-analysis-overview">
+                        <div className="attack-analysis-metric">
+                          <span>Total recorded events</span>
+                          <strong>{attackPathAnalysis.eventCount}</strong>
+                        </div>
+                        <div className="attack-analysis-metric">
+                          <span>Distinct event types</span>
+                          <strong>{attackPathAnalysis.uniqueEventCount}</strong>
+                        </div>
+                      </div>
+
+                      <h5>Event observations</h5>
+
+                      {attackPathAnalysis.observations.length === 0 ? (
+                        <p>No recorded events are available to analyze.</p>
+                      ) : (
+                        <div className="attack-analysis-observations">
+                          {attackPathAnalysis.observations.map((item) => (
+                            <div
+                              className="attack-analysis-observation"
+                              key={item.type}
+                            >
+                              <strong>{item.type.replace(/_/g, " ")}</strong>
+                              <p>{item.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <h5>Event Transitions</h5>
+
+{attackPathAnalysis.transitions.length === 0 ? (
+  <p>
+    At least two recorded events are needed to analyze transitions.
+  </p>
+) : (
+  <div className="attack-analysis-transitions">
+    {attackPathAnalysis.transitions.map((transition, index) => (
+      <div
+        className="attack-analysis-transition"
+        key={`${transition.fromId}-${transition.toId}-${index}`}
+      >
+        <div>
+          <span>FROM</span>
+          <strong>{transition.from.replaceAll("_", " ")}</strong>
+          <small>{transition.fromId}</small>
+        </div>
+
+        <span className="attack-transition-arrow" aria-hidden="true">
+          →
+        </span>
+
+        <div>
+          <span>TO</span>
+          <strong>{transition.to.replaceAll("_", " ")}</strong>
+          <small>{transition.toId}</small>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
+<h5>Recognized Sequence Patterns</h5>
+
+{attackPathAnalysis.detectedPatterns.length === 0 ? (
+  <p>
+    No configured consecutive event pattern was found in this sequence.
+    This does not establish that the path is safe.
+  </p>
+) : (
+  <div className="attack-analysis-observations">
+    {attackPathAnalysis.detectedPatterns.map((pattern) => (
+      <div
+        className="attack-analysis-observation"
+        key={pattern.title}
+      >
+        <strong>{pattern.title}</strong>
+        <p>{pattern.description}</p>
+      </div>
+    ))}
+  </div>
+)}
+
+                    <div className="event-details-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setSelectedPath(null)}
                       >
                         Close details
                       </button>
