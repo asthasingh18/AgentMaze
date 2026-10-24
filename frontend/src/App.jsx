@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import "./App.css";
 
@@ -57,6 +58,16 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedPath, setSelectedPath] = useState(null);
 
+  // Simulation Controls state
+  const [simulationLoading, setSimulationLoading] = useState(false);
+  const [simulationError, setSimulationError] = useState("");
+  const [simulationResult, setSimulationResult] = useState(null);
+
+  const [resilienceLoading, setResilienceLoading] = useState(false);
+  const [resilienceError, setResilienceError] = useState("");
+  const [resilienceData, setResilienceData] = useState(null);
+
+
   // Check backend connectivity.
   useEffect(() => {
     let isMounted = true;
@@ -90,46 +101,50 @@ function App() {
     };
   }, []);
 
-  // Fetch attack events and attack paths.
+  // Reusable loader for attack events and paths.
+  // Called on initial load and after a simulation completes.
+  async function refreshSecurityData() {
+    const [eventsResponse, pathsResponse] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/attack-events`),
+      fetch(`${API_BASE_URL}/api/attack-paths`),
+    ]);
+
+    if (!eventsResponse.ok || !pathsResponse.ok) {
+      throw new Error("Unable to load security data.");
+    }
+
+    const [eventsData, pathsData] = await Promise.all([
+      eventsResponse.json(),
+      pathsResponse.json(),
+    ]);
+
+    const events = Array.isArray(eventsData)
+      ? eventsData
+      : eventsData.events ?? eventsData.attack_events ?? [];
+
+    const paths = Array.isArray(pathsData)
+      ? pathsData
+      : pathsData.attack_paths ?? pathsData.paths ?? [];
+
+    setAttackEvents(events);
+
+    setAttackEventsTotal(
+      typeof eventsData.total === "number"
+        ? eventsData.total
+        : events.length
+    );
+
+    setAttackPaths(paths);
+    setSecurityError("");
+  }
+
+  // Load existing security data when the dashboard opens.
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSecurityData() {
+    async function loadInitialSecurityData() {
       try {
-        const [eventsResponse, pathsResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/attack-events`),
-          fetch(`${API_BASE_URL}/api/attack-paths`),
-        ]);
-
-        if (!eventsResponse.ok || !pathsResponse.ok) {
-          throw new Error("Unable to load security data.");
-        }
-
-        const [eventsData, pathsData] = await Promise.all([
-          eventsResponse.json(),
-          pathsResponse.json(),
-        ]);
-
-        const events = Array.isArray(eventsData)
-          ? eventsData
-          : eventsData.events ?? eventsData.attack_events ?? [];
-
-        const paths = Array.isArray(pathsData)
-          ? pathsData
-          : pathsData.attack_paths ?? pathsData.paths ?? [];
-
-        if (isMounted) {
-          setAttackEvents(events);
-
-          setAttackEventsTotal(
-            typeof eventsData.total === "number"
-              ? eventsData.total
-              : events.length
-          );
-
-          setAttackPaths(paths);
-          setSecurityError("");
-        }
+        await refreshSecurityData();
       } catch {
         if (isMounted) {
           setSecurityError(
@@ -143,14 +158,117 @@ function App() {
       }
     }
 
-    loadSecurityData();
+    loadInitialSecurityData();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
+  // Run the backend's existing simulation endpoint.
+  async function handleRunSimulation() {
+    setSimulationLoading(true);
+    setSimulationError("");
+    setSimulationResult(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/simulate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const responseText = await response.text();
+      let result;
+
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        throw new Error(
+          "The simulation API returned an unreadable response."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail ??
+            result.message ??
+            `Simulation failed with status ${response.status}.`
+        );
+      }
+
+      setSimulationResult(result);
+
+      // Refresh dashboard data after a successful simulation.
+      try {
+        await refreshSecurityData();
+      } catch {
+        setSimulationError(
+          "The simulation completed, but the dashboard could not refresh. Use the retry button below to reload the data."
+        );
+      }
+    } catch (error) {
+      setSimulationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to run the simulation. Check that the backend is running."
+      );
+    } finally {
+      setSimulationLoading(false);
+    }
+  }
+
+  
+const handleRunResilienceAnalysis = async () => {
+  setResilienceLoading(true);
+  setResilienceError("");
+  setResilienceData(null);
+
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:8000/api/resilience-analysis",
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    setResilienceData(data);
+  } catch (error) {
+    setResilienceError(
+      error.message || "Unable to run resilience analysis."
+    );
+  } finally {
+    setResilienceLoading(false);
+  }
+};
+
+
+  // Manually retry loading security data.
+  async function handleRefreshSecurityData() {
+    setSecurityLoading(true);
+    setSecurityError("");
+
+    try {
+      await refreshSecurityData();
+      setSimulationError("");
+    } catch {
+      setSecurityError(
+        "Could not refresh security data. Please check the backend and retry."
+      );
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
   // Reset pagination when filters change.
+  const [currentPage, setCurrentPage] = useState(1);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [severityFilter, eventSearch]);
@@ -178,7 +296,6 @@ function App() {
   });
 
   const EVENTS_PER_PAGE = 5;
-  const [currentPage, setCurrentPage] = useState(1);
 
   const totalPages = Math.max(
     1,
@@ -220,135 +337,128 @@ function App() {
     ...severityLevels.map((level) => severityCounts[level.key] ?? 0)
   );
 
-  // Prepare the events for the selected attack path.
+  // Prepare events for the selected attack path.
   const selectedPathEvents = Array.isArray(selectedPath?.events)
     ? [...selectedPath.events]
         .filter((event) => event && typeof event === "object")
         .sort((a, b) => {
           const orderA = Number(a.event_order ?? 0);
           const orderB = Number(b.event_order ?? 0);
-
           return orderA - orderB;
         })
     : [];
 
   const attackPathAnalysis = (() => {
-  const events = selectedPathEvents;
+    const events = selectedPathEvents;
 
-  // Normalize the recorded event types
-  const eventTypes = events.map((event) =>
-    String(event.event_type ?? "UNKNOWN").toUpperCase()
-  );
-
-  const uniqueEventTypes = [...new Set(eventTypes)];
-
-  const risk = String(
-    selectedPath?.risk_level ?? "UNKNOWN"
-  ).toUpperCase();
-
-  // Interpret the risk assigned by the existing system
-  let riskExplanation =
-    "The recorded path does not provide enough information to interpret its risk level.";
-
-  if (risk === "CRITICAL") {
-    riskExplanation =
-      "The path is marked Critical by the existing system. Review the recorded sequence and affected capabilities.";
-  } else if (risk === "HIGH") {
-    riskExplanation =
-      "The path is marked High by the existing system. Review the event sequence for possible security boundary violations.";
-  } else if (risk === "MEDIUM") {
-    riskExplanation =
-      "The path is marked Medium by the existing system. Review the recorded events to understand the potential impact.";
-  } else if (risk === "LOW") {
-    riskExplanation =
-      "The path is marked Low by the existing system. Review the recorded sequence and its context.";
-  } else if (risk === "PENDING") {
-    riskExplanation =
-      "Risk assessment is pending. Do not interpret this path as having a confirmed risk level.";
-  }
-
-  // Descriptions of recognized event types
-  const eventDescriptions = {
-    GOAL_HIJACKING:
-      "The recorded event indicates that an agent's intended goal may have been redirected.",
-    SESSION_CONTEXT_CONTAMINATION:
-      "The recorded event indicates that session context may have been contaminated.",
-    INTER_AGENT_TRUST_ESCALATION:
-      "The recorded event indicates a possible escalation of trust between agents."
-  };
-
-  const observations = uniqueEventTypes.map((type) => ({
-    type,
-    description:
-      eventDescriptions[type] ??
-      "No specific interpretation is configured for this event type. Inspect its recorded details."
-  }));
-
-  // Analyze transitions between consecutive recorded events
-  const transitions = events.slice(1).map((event, index) => ({
-    from: String(
-      events[index].event_type ?? "UNKNOWN"
-    ).toUpperCase(),
-    to: String(event.event_type ?? "UNKNOWN").toUpperCase(),
-    fromId: events[index].event_id ?? "Unknown ID",
-    toId: event.event_id ?? "Unknown ID"
-  }));
-
-  // Recognize a pattern only when all required events occur
-  // consecutively in the recorded sequence.
-  const sequencePatterns = [
-    {
-      events: [
-        "GOAL_HIJACKING",
-        "SESSION_CONTEXT_CONTAMINATION",
-        "INTER_AGENT_TRUST_ESCALATION"
-      ],
-      title: "Goal hijacking and trust escalation sequence",
-      description:
-        "The recorded sequence contains goal hijacking followed by session context contamination and inter-agent trust escalation. Review the event details to determine how these events were connected."
-    },
-    {
-      events: [
-        "GOAL_HIJACKING",
-        "INTER_AGENT_TRUST_ESCALATION"
-      ],
-      title: "Goal hijacking followed by trust escalation",
-      description:
-        "The recorded sequence contains goal hijacking immediately followed by inter-agent trust escalation. Inspect the transition and the agent capabilities involved."
-    },
-    {
-      events: [
-        "SESSION_CONTEXT_CONTAMINATION",
-        "INTER_AGENT_TRUST_ESCALATION"
-      ],
-      title: "Context contamination followed by trust escalation",
-      description:
-        "The recorded sequence contains session context contamination immediately followed by inter-agent trust escalation. Review whether the context influenced a subsequent agent decision."
-    }
-  ];
-
-  const detectedPatterns = sequencePatterns.filter((pattern) => {
-    const patternLength = pattern.events.length;
-
-    return eventTypes.some((_, startIndex) =>
-      pattern.events.every(
-        (type, patternIndex) =>
-          eventTypes[startIndex + patternIndex] === type
-      ) &&
-      startIndex + patternLength <= eventTypes.length
+    const eventTypes = events.map((event) =>
+      String(event.event_type ?? "UNKNOWN").toUpperCase()
     );
-  });
 
-  return {
-    risk,
-    riskExplanation,
-    observations,
-    eventCount: events.length,
-    uniqueEventCount: uniqueEventTypes.length,
-    transitions,
-    detectedPatterns
-  };
-})();
+    const uniqueEventTypes = [...new Set(eventTypes)];
+
+    const risk = String(
+      selectedPath?.risk_level ?? "UNKNOWN"
+    ).toUpperCase();
+
+    let riskExplanation =
+      "The recorded path does not provide enough information to interpret its risk level.";
+
+    if (risk === "CRITICAL") {
+      riskExplanation =
+        "The path is marked Critical by the existing system. Review the recorded sequence and affected capabilities.";
+    } else if (risk === "HIGH") {
+      riskExplanation =
+        "The path is marked High by the existing system. Review the event sequence for possible security boundary violations.";
+    } else if (risk === "MEDIUM") {
+      riskExplanation =
+        "The path is marked Medium by the existing system. Review the recorded events to understand the potential impact.";
+    } else if (risk === "LOW") {
+      riskExplanation =
+        "The path is marked Low by the existing system. Review the recorded sequence and its context.";
+    } else if (risk === "PENDING") {
+      riskExplanation =
+        "Risk assessment is pending. Do not interpret this path as having a confirmed risk level.";
+    }
+
+    const eventDescriptions = {
+      GOAL_HIJACKING:
+        "The recorded event indicates that an agent's intended goal may have been redirected.",
+      SESSION_CONTEXT_CONTAMINATION:
+        "The recorded event indicates that session context may have been contaminated.",
+      INTER_AGENT_TRUST_ESCALATION:
+        "The recorded event indicates a possible escalation of trust between agents.",
+    };
+
+    const observations = uniqueEventTypes.map((type) => ({
+      type,
+      description:
+        eventDescriptions[type] ??
+        "No specific interpretation is configured for this event type. Inspect its recorded details.",
+    }));
+
+    const transitions = events.slice(1).map((event, index) => ({
+      from: String(
+        events[index].event_type ?? "UNKNOWN"
+      ).toUpperCase(),
+      to: String(event.event_type ?? "UNKNOWN").toUpperCase(),
+      fromId: events[index].event_id ?? "Unknown ID",
+      toId: event.event_id ?? "Unknown ID",
+    }));
+
+    const sequencePatterns = [
+      {
+        events: [
+          "GOAL_HIJACKING",
+          "SESSION_CONTEXT_CONTAMINATION",
+          "INTER_AGENT_TRUST_ESCALATION",
+        ],
+        title: "Goal hijacking and trust escalation sequence",
+        description:
+          "The recorded sequence contains goal hijacking followed by session context contamination and inter-agent trust escalation. Review the event details to determine how these events were connected.",
+      },
+      {
+        events: [
+          "GOAL_HIJACKING",
+          "INTER_AGENT_TRUST_ESCALATION",
+        ],
+        title: "Goal hijacking followed by trust escalation",
+        description:
+          "The recorded sequence contains goal hijacking immediately followed by inter-agent trust escalation. Inspect the transition and the agent capabilities involved.",
+      },
+      {
+        events: [
+          "SESSION_CONTEXT_CONTAMINATION",
+          "INTER_AGENT_TRUST_ESCALATION",
+        ],
+        title: "Context contamination followed by trust escalation",
+        description:
+          "The recorded sequence contains session context contamination immediately followed by inter-agent trust escalation. Review whether the context influenced a subsequent agent decision.",
+      },
+    ];
+
+    const detectedPatterns = sequencePatterns.filter((pattern) => {
+      const patternLength = pattern.events.length;
+
+      return eventTypes.some((_, startIndex) =>
+        startIndex + patternLength <= eventTypes.length &&
+        pattern.events.every(
+          (type, patternIndex) =>
+            eventTypes[startIndex + patternIndex] === type
+        )
+      );
+    });
+
+    return {
+      risk,
+      riskExplanation,
+      observations,
+      eventCount: events.length,
+      uniqueEventCount: uniqueEventTypes.length,
+      transitions,
+      detectedPatterns,
+    };
+  })();
 
   return (
     <div className="app">
@@ -478,10 +588,7 @@ function App() {
         </section>
 
         {/* Live security overview */}
-        <section
-          className="security-overview"
-          id="security-overview"
-        >
+        <section className="security-overview" id="security-overview">
           <div className="section-heading">
             <div>
               <div className="eyebrow">LIVE SECURITY DATA</div>
@@ -496,9 +603,17 @@ function App() {
               Loading security data...
             </p>
           ) : securityError ? (
-            <p className="security-message security-error">
-              {securityError}
-            </p>
+            <div className="security-message security-error">
+              <p>{securityError}</p>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleRefreshSecurityData}
+                disabled={securityLoading}
+              >
+                Retry loading data
+              </button>
+            </div>
           ) : (
             <>
               {/* Overview statistics */}
@@ -515,6 +630,225 @@ function App() {
                   <small>Paths returned by the API</small>
                 </article>
               </div>
+
+              {/* Simulation Controls */}
+              <section
+                className="simulation-panel"
+                aria-labelledby="simulation-title"
+              >
+                <div className="simulation-panel-heading">
+                  <div>
+                    <div className="eyebrow">CONTROLLED TEST RUN</div>
+                    <h3 id="simulation-title">Simulation Controls</h3>
+                    <p>
+                      Run the existing agent delegation security test against
+                      the backend.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="primary-button simulation-run-button"
+                    onClick={handleRunSimulation}
+                    disabled={
+                      simulationLoading || apiStatus !== "connected"
+                    }
+                  >
+                    {simulationLoading
+                      ? "Running simulation..."
+                      : "Run Simulation"}
+                  </button>
+                </div>
+
+                <p className="simulation-note">
+                  This test checks an authorized customer-search delegation
+                  and an unauthorized database-administration delegation. It
+                  uses the backend's existing simulation logic.
+                </p>
+
+                {apiStatus !== "connected" && (
+                  <p
+                    className="simulation-message simulation-error"
+                    role="status"
+                  >
+                    The backend must be connected before a simulation can run.
+                  </p>
+                )}
+
+                {simulationLoading && (
+                  <p
+                    className="simulation-message"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    Simulation is running. Please wait...
+                  </p>
+                )}
+
+                {simulationError && (
+                  <div
+                    className="simulation-message simulation-error"
+                    role="alert"
+                  >
+                    <p>{simulationError}</p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleRefreshSecurityData}
+                      disabled={securityLoading}
+                    >
+                      {securityLoading
+                        ? "Refreshing..."
+                        : "Retry data refresh"}
+                    </button>
+                  </div>
+                )}
+
+                {simulationResult && (
+                  <div className="simulation-result" role="status">
+                    <div className="simulation-result-heading">
+                      <div>
+                        <span className="simulation-result-label">
+                          LATEST RUN
+                        </span>
+                        <h4>Simulation completed</h4>
+                      </div>
+
+                      <span className="simulation-status">
+                        {String(
+                          simulationResult.status ?? "completed"
+                        ).toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="simulation-result-grid">
+                      <div className="event-detail-field">
+                        <span>Scenario</span>
+                        <strong>
+                          {simulationResult.scenario ??
+                            "Agent delegation security test"}
+                        </strong>
+                      </div>
+
+                      <div className="event-detail-field">
+                        <span>Scenario ID</span>
+                        <strong>
+                          {simulationResult.scenario_id ?? "Not returned"}
+                        </strong>
+                      </div>
+
+                      <div className="event-detail-field">
+                        <span>Events in response</span>
+                        <strong>
+                          {Array.isArray(simulationResult.attack_events)
+                            ? simulationResult.attack_events.length
+                            : 0}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <details className="simulation-response-details">
+                      <summary>View full simulation response</summary>
+                      <pre>
+                        {JSON.stringify(simulationResult, null, 2)}
+                      </pre>
+                    </details>
+
+                    <p className="simulation-note">
+                      Dashboard data was refreshed after the run. Review the
+                      recorded events and paths below to inspect what the
+                      backend returned.
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className="resilience-panel">
+                <div className="resilience-heading">
+                  <div>
+                    <h2>Resilience &amp; Failure Analysis</h2>
+                    <p>
+                      Evaluate successful operations, security blocks, and
+                      failures in a controlled simulation.
+                    </p>
+                  </div>
+
+                  <button
+                    className="resilience-button"
+                    onClick={handleRunResilienceAnalysis}
+                    disabled={resilienceLoading}
+                  >
+                    {resilienceLoading
+                      ? "Analyzing..."
+                      : "Run Resilience Analysis"}
+                  </button>
+                </div>
+
+                {resilienceError && (
+                  <p className="resilience-error">{resilienceError}</p>
+                )}
+
+                {resilienceData && (
+                  <>
+                    <div className="resilience-metrics">
+                      <div className="resilience-metric">
+                        <span>Successful Operations</span>
+                        <strong>
+                          {resilienceData.metrics.successful_operations}
+                        </strong>
+                      </div>
+
+                      <div className="resilience-metric">
+                        <span>Security Blocks</span>
+                        <strong>
+                          {resilienceData.metrics.security_blocks}
+                        </strong>
+                      </div>
+
+                      <div className="resilience-metric">
+                        <span>Operational Failures</span>
+                        <strong>
+                          {resilienceData.metrics.operational_failures}
+                        </strong>
+                      </div>
+
+                      <div className="resilience-metric">
+                        <span>Unexpected Successes</span>
+                        <strong>
+                          {resilienceData.metrics.unexpected_successes}
+                        </strong>
+                      </div>
+
+                      <div className="resilience-metric">
+                        <span>Safe Outcome Rate</span>
+                        <strong>
+                          {resilienceData.metrics.safe_outcome_rate_percent}%
+                        </strong>
+                      </div>
+                    </div>
+
+                    <h3>Scenario Outcomes</h3>
+
+                    <div className="resilience-outcomes">
+                      {resilienceData.outcomes.map((outcome) => (
+                        <div
+                          className="resilience-outcome"
+                          key={outcome.scenario}
+                        >
+                          <strong>
+                            {outcome.scenario.replaceAll("_", " ")}
+                          </strong>
+                          <span>
+                            {outcome.category.replaceAll("_", " ")}
+                          </span>
+                          <p>{outcome.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </section>
+
 
               {/* Severity distribution */}
               <div className="severity-chart-panel">
@@ -844,8 +1178,7 @@ function App() {
                                       </div>
                                     </div>
 
-                                    {eventIndex <
-                                      pathEvents.length - 1 && (
+                                    {eventIndex < pathEvents.length - 1 && (
                                       <div
                                         className="attack-chain-connector"
                                         aria-hidden="true"
@@ -1119,6 +1452,7 @@ function App() {
                         </div>
                       )}
                     </div>
+
                     <div className="attack-path-analysis">
                       <h4>Attack Path Analysis</h4>
 
@@ -1136,7 +1470,9 @@ function App() {
                         </div>
                         <div className="attack-analysis-metric">
                           <span>Distinct event types</span>
-                          <strong>{attackPathAnalysis.uniqueEventCount}</strong>
+                          <strong>
+                            {attackPathAnalysis.uniqueEventCount}
+                          </strong>
                         </div>
                       </div>
 
@@ -1151,66 +1487,80 @@ function App() {
                               className="attack-analysis-observation"
                               key={item.type}
                             >
-                              <strong>{item.type.replace(/_/g, " ")}</strong>
+                              <strong>
+                                {item.type.replace(/_/g, " ")}
+                              </strong>
                               <p>{item.description}</p>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
+
                     <h5>Event Transitions</h5>
 
-{attackPathAnalysis.transitions.length === 0 ? (
-  <p>
-    At least two recorded events are needed to analyze transitions.
-  </p>
-) : (
-  <div className="attack-analysis-transitions">
-    {attackPathAnalysis.transitions.map((transition, index) => (
-      <div
-        className="attack-analysis-transition"
-        key={`${transition.fromId}-${transition.toId}-${index}`}
-      >
-        <div>
-          <span>FROM</span>
-          <strong>{transition.from.replaceAll("_", " ")}</strong>
-          <small>{transition.fromId}</small>
-        </div>
+                    {attackPathAnalysis.transitions.length === 0 ? (
+                      <p>
+                        At least two recorded events are needed to analyze
+                        transitions.
+                      </p>
+                    ) : (
+                      <div className="attack-analysis-transitions">
+                        {attackPathAnalysis.transitions.map(
+                          (transition, index) => (
+                            <div
+                              className="attack-analysis-transition"
+                              key={`${transition.fromId}-${transition.toId}-${index}`}
+                            >
+                              <div>
+                                <span>FROM</span>
+                                <strong>
+                                  {transition.from.replace(/_/g, " ")}
+                                </strong>
+                                <small>{transition.fromId}</small>
+                              </div>
 
-        <span className="attack-transition-arrow" aria-hidden="true">
-          →
-        </span>
+                              <span
+                                className="attack-transition-arrow"
+                                aria-hidden="true"
+                              >
+                                →
+                              </span>
 
-        <div>
-          <span>TO</span>
-          <strong>{transition.to.replaceAll("_", " ")}</strong>
-          <small>{transition.toId}</small>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
+                              <div>
+                                <span>TO</span>
+                                <strong>
+                                  {transition.to.replace(/_/g, " ")}
+                                </strong>
+                                <small>{transition.toId}</small>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
 
-<h5>Recognized Sequence Patterns</h5>
+                    <h5>Recognized Sequence Patterns</h5>
 
-{attackPathAnalysis.detectedPatterns.length === 0 ? (
-  <p>
-    No configured consecutive event pattern was found in this sequence.
-    This does not establish that the path is safe.
-  </p>
-) : (
-  <div className="attack-analysis-observations">
-    {attackPathAnalysis.detectedPatterns.map((pattern) => (
-      <div
-        className="attack-analysis-observation"
-        key={pattern.title}
-      >
-        <strong>{pattern.title}</strong>
-        <p>{pattern.description}</p>
-      </div>
-    ))}
-  </div>
-)}
+                    {attackPathAnalysis.detectedPatterns.length === 0 ? (
+                      <p>
+                        No configured consecutive event pattern was found in
+                        this sequence. This does not establish that the path
+                        is safe.
+                      </p>
+                    ) : (
+                      <div className="attack-analysis-observations">
+                        {attackPathAnalysis.detectedPatterns.map((pattern) => (
+                          <div
+                            className="attack-analysis-observation"
+                            key={pattern.title}
+                          >
+                            <strong>{pattern.title}</strong>
+                            <p>{pattern.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="event-details-actions">
                       <button
